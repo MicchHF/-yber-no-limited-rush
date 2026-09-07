@@ -143,6 +143,9 @@ app.get("/api/health", (_req, res) => {
   res.json({ status: "ok", studio: "Squeezed Hamster Games", engine: "Voxotron Mobile Voxel Engine" });
 });
 
+// API Router setup to support both direct /api and subpath /rush/api
+const apiRouter = express.Router();
+
 // Helper for saving cloud profile
 const handleCloudSave = (req: express.Request, res: express.Response) => {
   const { syncKey, profile, profileData } = req.body;
@@ -163,8 +166,8 @@ const handleCloudSave = (req: express.Request, res: express.Response) => {
 };
 
 // API: Cloud Save (both endpoint variants)
-app.post("/api/cloud/save", handleCloudSave);
-app.post("/api/cloud-save", handleCloudSave);
+apiRouter.post("/cloud/save", handleCloudSave);
+apiRouter.post("/cloud-save", handleCloudSave);
 
 // Helper for loading cloud profile
 const handleCloudLoad = (req: express.Request, res: express.Response) => {
@@ -177,8 +180,8 @@ const handleCloudLoad = (req: express.Request, res: express.Response) => {
 };
 
 // API: Cloud Load (both endpoint variants)
-app.get("/api/cloud/load/:syncKey", handleCloudLoad);
-app.get("/api/cloud-save/:syncKey", handleCloudLoad);
+apiRouter.get("/cloud/load/:syncKey", handleCloudLoad);
+apiRouter.get("/cloud-save/:syncKey", handleCloudLoad);
 
 // Helper for fetching leaderboards
 const handleGetLeaderboards = (req: express.Request, res: express.Response) => {
@@ -197,9 +200,9 @@ const handleGetLeaderboards = (req: express.Request, res: express.Response) => {
 };
 
 // API: Leaderboards GET (supports /api/leaderboards, /api/leaderboard, and /api/leaderboard/:mode)
-app.get("/api/leaderboards", handleGetLeaderboards);
-app.get("/api/leaderboard", handleGetLeaderboards);
-app.get("/api/leaderboard/:mode", handleGetLeaderboards);
+apiRouter.get("/leaderboards", handleGetLeaderboards);
+apiRouter.get("/leaderboard", handleGetLeaderboards);
+apiRouter.get("/leaderboard/:mode", handleGetLeaderboards);
 
 // Helper for submitting scores
 const handleSubmitLeaderboard = (req: express.Request, res: express.Response) => {
@@ -233,11 +236,11 @@ const handleSubmitLeaderboard = (req: express.Request, res: express.Response) =>
 };
 
 // API: Leaderboard SUBMIT (both endpoint variants)
-app.post("/api/leaderboard/submit", handleSubmitLeaderboard);
-app.post("/api/leaderboard", handleSubmitLeaderboard);
+apiRouter.post("/leaderboard/submit", handleSubmitLeaderboard);
+apiRouter.post("/leaderboard", handleSubmitLeaderboard);
 
 // API: Real-time Live Ghost Racers
-app.get("/api/ghost-racers", (req, res) => {
+apiRouter.get("/ghost-racers", (req, res) => {
   const mode = (req.query.mode as string) || "survival";
   // Select 3-4 ghost racers to populate the race track
   res.json({
@@ -250,7 +253,7 @@ app.get("/api/ghost-racers", (req, res) => {
 });
 
 // API: Daily Challenge info (Weekly landscape theme)
-app.get("/api/daily-info", (_req, res) => {
+apiRouter.get("/daily-info", (_req, res) => {
   const now = new Date();
   const dayOfYear = Math.floor((now.getTime() - new Date(now.getFullYear(), 0, 0).getTime()) / (1000 * 60 * 60 * 24));
   const weekNum = Math.ceil(dayOfYear / 7);
@@ -272,6 +275,14 @@ app.get("/api/daily-info", (_req, res) => {
   });
 });
 
+apiRouter.get("/daily-challenge", (_req, res) => {
+  res.redirect("/api/daily-info");
+});
+
+// Mount API router for root /api and subpath /rush/api
+app.use("/api", apiRouter);
+app.use("/rush/api", apiRouter);
+
 // Vite middleware & Static Serving setup
 async function startServer() {
   if (process.env.NODE_ENV !== "production") {
@@ -283,7 +294,8 @@ async function startServer() {
   } else {
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
-    app.get("*", (_req, res) => {
+    app.use("/rush", express.static(distPath));
+    app.get(["*", "/rush/*"], (_req, res) => {
       res.sendFile(path.join(distPath, "index.html"));
     });
   }

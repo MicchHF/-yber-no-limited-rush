@@ -3,6 +3,22 @@ import { DEFAULT_LIGHTING } from '../game/lighting';
 
 const STORAGE_KEY = 'voxotron_squeezed_hamster_profile_v2';
 
+// Helper to determine the correct base API path (handles subpaths like /rush/)
+export function getApiUrl(endpoint: string): string {
+  if (typeof window === 'undefined') return endpoint;
+  const path = window.location.pathname;
+  const match = path.match(/^(\/[^/]+)/);
+  let prefix = '';
+  if (match && match[1] && !match[1].includes('.') && match[1] !== '/') {
+    prefix = match[1];
+  }
+  const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+  if (prefix && cleanEndpoint.startsWith(prefix)) {
+    return cleanEndpoint;
+  }
+  return prefix ? `${prefix}${cleanEndpoint}` : cleanEndpoint;
+}
+
 export const DEFAULT_VEHICLES: Record<string, VehicleDef> = {
   hamster_interceptor: {
     id: 'hamster_interceptor',
@@ -403,7 +419,7 @@ export function saveLocalProfile(profile: UserProfile): void {
 
 export async function saveProfileToCloud(profile: UserProfile): Promise<{ success: boolean; error?: string }> {
   try {
-    const response = await fetch('/api/cloud-save', {
+    const response = await fetch(getApiUrl('/api/cloud-save'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -420,7 +436,7 @@ export async function saveProfileToCloud(profile: UserProfile): Promise<{ succes
 
 export async function loadProfileFromCloud(syncKey: string): Promise<{ success: boolean; profile?: UserProfile; error?: string }> {
   try {
-    const response = await fetch(`/api/cloud-save/${encodeURIComponent(syncKey)}`);
+    const response = await fetch(getApiUrl(`/api/cloud-save/${encodeURIComponent(syncKey)}`));
     const data = await response.json();
     if (data.success && (data.profile || data.profileData)) {
       return { success: true, profile: data.profile || data.profileData };
@@ -434,7 +450,7 @@ export async function loadProfileFromCloud(syncKey: string): Promise<{ success: 
 export async function fetchLeaderboard(mode: string): Promise<LeaderboardEntry[]> {
   const cacheKey = `voxotron_lb_${mode}`;
   try {
-    const res = await fetch(`/api/leaderboard/${encodeURIComponent(mode)}`);
+    const res = await fetch(getApiUrl(`/api/leaderboard/${encodeURIComponent(mode)}`));
     const data = await res.json();
     if (Array.isArray(data.records) && data.records.length > 0) {
       localStorage.setItem(cacheKey, JSON.stringify(data.records));
@@ -467,7 +483,7 @@ export async function submitLeaderboardScore(scoreData: {
 }): Promise<{ success: boolean; rank?: number }> {
   const cacheKey = `voxotron_lb_${scoreData.mode}`;
   try {
-    const res = await fetch('/api/leaderboard', {
+    const res = await fetch(getApiUrl('/api/leaderboard'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(scoreData),
@@ -505,7 +521,7 @@ export async function submitLeaderboardScore(scoreData: {
 
 export async function fetchDailyInfo() {
   try {
-    const res = await fetch('/api/daily-challenge');
+    const res = await fetch(getApiUrl('/api/daily-challenge'));
     return await res.json();
   } catch {
     return null;

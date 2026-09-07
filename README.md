@@ -94,6 +94,34 @@ pm2 startup
 
 ---
 
+## 🌐 Настройка Nginx при размещении игры в подпапке (напр. https://game.dalazareva.ru/rush/)
+
+Если у вас на основном домене `https://game.dalazareva.ru/` находится **Хаб игр**, а эта игра развернута по пути `/rush/`, добавьте следующий блок в конфигурацию вашего виртуального хоста Nginx (обычно `/etc/nginx/sites-available/...`):
+
+```nginx
+# Конфигурация для игры Unlimited Rush в подпапке /rush/
+location /rush/ {
+    proxy_pass http://127.0.0.1:3000/;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection 'upgrade';
+    proxy_set_header Host $host;
+    proxy_cache_bypass $http_upgrade;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+```
+
+> **Важно:** Обратите внимание на завершающий слэш в `proxy_pass http://127.0.0.1:3000/;`! Он сообщает Nginx срезать префикс `/rush/` при передаче запроса в сервер приложения, либо вы можете использовать без слэша — игра теперь аппаратно поддерживает оба варианта маршрутизации как по корню, так и по `/rush/`.
+
+После изменения конфига Nginx выполните:
+```bash
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+---
+
 ## 🏆 Система лидерборда и API
 
 В игру встроен быстрый и надежный backend API для учета рекордов и облачных сохранений:
