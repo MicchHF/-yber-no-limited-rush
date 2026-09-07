@@ -1,0 +1,6 @@
+{
+  "name": "UNLIMITED // RUSH",
+  "description": "Киберпанк воксельная гоночная игра в стиле TRON на изгибающейся 360° магнитной трассе. Без тормозов, максимальная скорость и атмосферный неоновый город.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

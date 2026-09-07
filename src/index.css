@@ -1,0 +1,46 @@
+@import "tailwindcss";
+
+@layer base {
+  * {
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+  }
+
+  html, body, #root {
+    touch-action: none;
+    overscroll-behavior: none;
+    overflow: hidden;
+  }
+}
+
+/* Custom minimal scrollbar */
+.scrollbar-thin::-webkit-scrollbar {
+  height: 4px;
+  width: 4px;
+}
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: rgba(24, 24, 27, 0.5);
+}
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: rgba(82, 82, 91, 0.8);
+  border-radius: 9999px;
+}
+
+/* Safe area insets for notches, Dynamic Island, and home bars */
+.pt-safe {
+  padding-top: max(env(safe-area-inset-top, 0px), 12px);
+}
+.pb-safe {
+  padding-bottom: max(env(safe-area-inset-bottom, 0px), 12px);
+}
+.pl-safe {
+  padding-left: max(env(safe-area-inset-left, 0px), 8px);
+}
+.pr-safe {
+  padding-right: max(env(safe-area-inset-right, 0px), 8px);
+}
+.safe-top-offset {
+  top: max(env(safe-area-inset-top, 0px), 12px);
+}
+
