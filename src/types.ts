@@ -13,8 +13,10 @@ export type GameMode =
 
 export type QualityProfile = 'low' | 'medium' | 'high';
 
+export type LightingPresetId = 'nordic_dusk' | 'cyber_neon' | 'deep_obsidian' | 'cosmic_void' | 'solar_flare' | 'aurora_mist';
+
 export interface LightingSettings {
-  preset: 'nordic_dusk' | 'cyber_neon' | 'deep_obsidian' | 'cosmic_void' | 'solar_flare' | 'aurora_mist';
+  preset: LightingPresetId;
   ambientIntensity: number;     // 0.1 to 1.5
   sunIntensity: number;         // 0.2 to 2.5
   sunColor: string;             // hex color

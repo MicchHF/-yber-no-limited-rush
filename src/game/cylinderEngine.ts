@@ -345,15 +345,53 @@ export class VoxotronCylinderEngine {
       },
     });
 
-    const width = Math.max(this.container.clientWidth || window.innerWidth, 100);
-    const height = Math.max(this.container.clientHeight || window.innerHeight, 100);
+    const width = Math.max(this.container.clientWidth || (typeof window !== 'undefined' ? window.innerWidth : 320), 320);
+    const height = Math.max(this.container.clientHeight || (typeof window !== 'undefined' ? window.innerHeight : 480), 480);
 
     this.camera = new THREE.PerspectiveCamera(65, width / height, 0.1, 1200);
-    this.renderer = new THREE.WebGLRenderer({
-      antialias: true,
-      powerPreference: 'high-performance',
-      alpha: false,
-    });
+
+    // Safe WebGL initialization with fallback for iOS Low Power Mode / restricted contexts
+    let rendererInstance: THREE.WebGLRenderer | null = null;
+    const rendererConfigs: THREE.WebGLRendererParameters[] = [
+      { antialias: true, powerPreference: 'default', alpha: false, precision: 'mediump' },
+      { antialias: false, powerPreference: 'default', alpha: false, precision: 'mediump' },
+      { antialias: false, powerPreference: 'low-power', alpha: false },
+    ];
+
+    for (const config of rendererConfigs) {
+      try {
+        rendererInstance = new THREE.WebGLRenderer(config);
+        if (rendererInstance && rendererInstance.getContext()) {
+          break;
+        }
+      } catch (err) {
+        console.warn('[Voxotron] WebGLRenderer init try failed:', err);
+      }
+    }
+
+    if (!rendererInstance) {
+      throw new Error('Ваш браузер или устройство не поддерживает аппаратное ускорение WebGL.');
+    }
+    this.renderer = rendererInstance;
+
+    // Attach WebGL context loss and restore handlers for iOS WebKit
+    this.renderer.domElement.addEventListener(
+      'webglcontextlost',
+      (e) => {
+        e.preventDefault();
+        console.warn('[Voxotron] WebGL Context lost on iOS WebKit. Waiting for restoration...');
+      },
+      false,
+    );
+
+    this.renderer.domElement.addEventListener(
+      'webglcontextrestored',
+      () => {
+        console.info('[Voxotron] WebGL Context restored! Re-applying dimensions...');
+        this.handleResize();
+      },
+      false,
+    );
 
     const isMobileDevice =
       /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
@@ -366,7 +404,6 @@ export class VoxotronCylinderEngine {
     this.renderer.domElement.style.width = '100%';
     this.renderer.domElement.style.height = '100%';
     this.renderer.domElement.style.display = 'block';
-    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.35;
 
@@ -2076,9 +2113,9 @@ export class VoxotronCylinderEngine {
   }
 
   public handleResize() {
-    const width = this.container.clientWidth || window.innerWidth;
-    const height = this.container.clientHeight || window.innerHeight;
-    if (width > 0 && height > 0) {
+    const width = Math.max(this.container.clientWidth || (typeof window !== 'undefined' ? window.innerWidth : 320), 320);
+    const height = Math.max(this.container.clientHeight || (typeof window !== 'undefined' ? window.innerHeight : 480), 480);
+    if (this.camera && this.renderer) {
       this.camera.aspect = width / height;
       this.camera.updateProjectionMatrix();
       this.renderer.setSize(width, height);

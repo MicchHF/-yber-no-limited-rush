@@ -1,6 +1,6 @@
-import { LightingSettings } from '../types';
+import { LightingSettings, LightingPresetId } from '../types';
 
-export const LIGHTING_PRESETS: Record<string, LightingSettings> = {
+export const LIGHTING_PRESETS: Record<LightingPresetId, LightingSettings> = {
   cosmic_void: {
     preset: 'cosmic_void',
     ambientIntensity: 0.35,
@@ -82,7 +82,7 @@ export const LIGHTING_PRESETS: Record<string, LightingSettings> = {
 };
 
 export interface LightingPresetItem {
-  id: string;
+  id: LightingPresetId;
   name: string;
   description: string;
   settings: LightingSettings;

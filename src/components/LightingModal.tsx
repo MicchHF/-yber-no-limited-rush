@@ -1,6 +1,6 @@
 import React from 'react';
 import { X, Sun, Sliders, Cpu } from 'lucide-react';
-import { LightingSettings, QualityProfile } from '../types';
+import { LightingSettings, QualityProfile, LightingPresetId } from '../types';
 import { LIGHTING_PRESETS_LIST, LIGHTING_PRESETS } from '../game/lighting';
 
 interface LightingModalProps {
@@ -18,7 +18,7 @@ export const LightingModal: React.FC<LightingModalProps> = ({
 }) => {
   if (!isOpen) return null;
 
-  const handlePresetSelect = (presetId: string) => {
+  const handlePresetSelect = (presetId: LightingPresetId) => {
     const preset = LIGHTING_PRESETS[presetId];
     if (!preset) return;
     onChange({

@@ -372,8 +372,11 @@ export function loadLocalProfile(): UserProfile {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return createDefaultProfile();
     const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return createDefaultProfile();
+
     const defaultProf = createDefaultProfile();
 
+    // 1. Vehicles deep merge
     const mergedVehicles: Record<string, VehicleDef> = {};
     for (const [k, defaultVeh] of Object.entries(DEFAULT_VEHICLES)) {
       const saved = parsed.vehicles?.[k] || {};
@@ -392,19 +395,92 @@ export function loadLocalProfile(): UserProfile {
       };
     }
 
-    // If player has old boring "Pilot_xxx" name, replace with funny name
+    // 2. Touch controls deep merge with safe fallbacks
+    const touchControls = {
+      ...defaultProf.touchControls,
+      ...(parsed.touchControls && typeof parsed.touchControls === 'object' ? parsed.touchControls : {}),
+    };
+    if (typeof touchControls.sensitivity !== 'number' || isNaN(touchControls.sensitivity)) {
+      touchControls.sensitivity = 1.0;
+    }
+    if (!touchControls.layout) {
+      touchControls.layout = 'swipe_orbit';
+    }
+
+    // 3. Lighting settings deep merge
+    const lighting = {
+      ...defaultProf.lighting,
+      ...(parsed.lighting && typeof parsed.lighting === 'object' ? parsed.lighting : {}),
+    };
+
+    // 4. Quests safe validation & merge
+    let quests = defaultProf.quests;
+    if (Array.isArray(parsed.quests) && parsed.quests.length > 0) {
+      quests = defaultProf.quests.map((defQuest) => {
+        const savedQuest = parsed.quests.find((q: any) => q && q.id === defQuest.id);
+        if (!savedQuest) return defQuest;
+        return {
+          ...defQuest,
+          ...savedQuest,
+          target: typeof savedQuest.target === 'number' ? savedQuest.target : defQuest.target,
+          current: typeof savedQuest.current === 'number' ? savedQuest.current : 0,
+          completed: Boolean(savedQuest.completed),
+          claimed: Boolean(savedQuest.claimed),
+        };
+      });
+    }
+
+    // 5. Achievements safe validation & merge
+    let achievements = defaultProf.achievements;
+    if (Array.isArray(parsed.achievements) && parsed.achievements.length > 0) {
+      achievements = defaultProf.achievements.map((defAch) => {
+        const savedAch = parsed.achievements.find((a: any) => a && a.id === defAch.id);
+        if (!savedAch) return defAch;
+        return {
+          ...defAch,
+          ...savedAch,
+          progress: typeof savedAch.progress === 'number' ? savedAch.progress : 0,
+          unlocked: Boolean(savedAch.unlocked),
+        };
+      });
+    }
+
+    // 6. Stats safe merge
+    const stats = {
+      ...defaultProf.stats,
+      ...(parsed.stats && typeof parsed.stats === 'object' ? parsed.stats : {}),
+    };
+
+    // 7. Pilot Name
     let playerName = parsed.playerName || defaultProf.playerName;
-    if (!playerName || playerName.startsWith('Pilot_')) {
+    if (!playerName || typeof playerName !== 'string' || playerName.startsWith('Pilot_')) {
       playerName = generateFunnyPilotName();
     }
 
+    // 8. Vehicle selection
+    const selectedVehicleId =
+      mergedVehicles[parsed.selectedVehicleId] ? parsed.selectedVehicleId : defaultProf.selectedVehicleId;
+
     return {
-      ...defaultProf,
-      ...parsed,
       playerName,
+      syncKey: typeof parsed.syncKey === 'string' && parsed.syncKey ? parsed.syncKey : defaultProf.syncKey,
+      coins: typeof parsed.coins === 'number' && !isNaN(parsed.coins) ? parsed.coins : defaultProf.coins,
+      scrapVoxels: typeof parsed.scrapVoxels === 'number' && !isNaN(parsed.scrapVoxels) ? parsed.scrapVoxels : defaultProf.scrapVoxels,
+      selectedVehicleId,
       vehicles: mergedVehicles,
+      lighting,
+      touchControls,
+      bestDistanceSurvival: typeof parsed.bestDistanceSurvival === 'number' ? parsed.bestDistanceSurvival : 0,
+      bestSprintScore: typeof parsed.bestSprintScore === 'number' ? parsed.bestSprintScore : 0,
+      bestDailyScore: typeof parsed.bestDailyScore === 'number' ? parsed.bestDailyScore : 0,
+      speedrunTimes: parsed.speedrunTimes && typeof parsed.speedrunTimes === 'object' ? parsed.speedrunTimes : {},
+      questDate: typeof parsed.questDate === 'string' ? parsed.questDate : defaultProf.questDate,
+      quests,
+      achievements,
+      stats,
     };
   } catch (e) {
+    console.warn('[Voxotron Storage] Corrupted profile encountered, resetting to defaults:', e);
     return createDefaultProfile();
   }
 }

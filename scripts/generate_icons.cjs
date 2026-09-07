@@ -35,7 +35,7 @@ function createCyberIconPNG(width, height, isMaskable = false) {
   const cx = width / 2;
   const cy = height / 2;
   const maxR = width / 2;
-  const paddingRatio = isMaskable ? 0.72 : 0.88;
+  const paddingRatio = isMaskable ? 0.70 : 0.85;
 
   for (let y = 0; y < height; y++) {
     const rowOffset = y * (stride + 1);
@@ -47,43 +47,46 @@ function createCyberIconPNG(width, height, isMaskable = false) {
       const dy = (y - cy) / (maxR * paddingRatio);
       const dist = Math.sqrt(dx * dx + dy * dy);
 
-      // Deep cyberpunk dark background gradient
-      let r = 12 + Math.floor(y / height * 10);
-      let g = 15 + Math.floor(x / width * 10);
-      let b = 24 + Math.floor(y / height * 16);
-      let a = 255;
+      // Solid dark cyberpunk background strictly matching #0d0f12
+      let r = 13;
+      let g = 15;
+      let b = 18;
+      let a = 255; // Strictly opaque (no alpha transparency for iOS apple-touch-icon compliance)
 
       // Outer glowing ring
-      if (Math.abs(dist - 0.78) < 0.045) {
-        // Cyan / Magenta glow
+      if (Math.abs(dist - 0.78) < 0.055) {
+        const ringGlow = 1.0 - Math.abs(dist - 0.78) / 0.055;
         const angle = Math.atan2(dy, dx);
         if (angle > 0) {
-          r = 0; g = 240; b = 255;
+          r = Math.floor(13 * (1 - ringGlow) + 0 * ringGlow);
+          g = Math.floor(15 * (1 - ringGlow) + 240 * ringGlow);
+          b = Math.floor(18 * (1 - ringGlow) + 255 * ringGlow);
         } else {
-          r = 255; g = 0; b = 100;
+          r = Math.floor(13 * (1 - ringGlow) + 255 * ringGlow);
+          g = Math.floor(15 * (1 - ringGlow) + 0 * ringGlow);
+          b = Math.floor(18 * (1 - ringGlow) + 128 * ringGlow);
         }
       }
 
       // Delta racing ship
-      // Apex at (0, -0.42), Left at (-0.32, 0.28), Right at (0.32, 0.28), Notch at (0, 0.16)
-      const inShip = (dy >= -0.45 && dy <= 0.28 && Math.abs(dx) <= (dy + 0.45) * 0.55);
-      const inNotch = (dy > 0.16 && dy <= 0.28 && Math.abs(dx) < (dy - 0.16) * 1.8);
+      const inShip = (dy >= -0.48 && dy <= 0.28 && Math.abs(dx) <= (dy + 0.48) * 0.58);
+      const inNotch = (dy > 0.16 && dy <= 0.28 && Math.abs(dx) < (dy - 0.16) * 1.6);
 
       if (inShip && !inNotch) {
         // Ship gradient: Neon cyan at top to vivid pink/orange
-        const t = (dy + 0.45) / 0.73;
+        const t = (dy + 0.48) / 0.76;
         r = Math.floor(0 * (1 - t) + 255 * t);
-        g = Math.floor(240 * (1 - t) + 20 * t);
-        b = Math.floor(255 * (1 - t) + 90 * t);
+        g = Math.floor(240 * (1 - t) + 30 * t);
+        b = Math.floor(255 * (1 - t) + 100 * t);
 
         // Cockpit glass
-        if (Math.abs(dx) < 0.08 && dy > -0.22 && dy < 0.06) {
+        if (Math.abs(dx) < 0.09 && dy > -0.25 && dy < 0.05) {
           r = 255; g = 255; b = 255;
         }
       }
 
       // Thruster flame
-      if (dy > 0.18 && dy < 0.44 && Math.abs(dx) < (0.44 - dy) * 0.4) {
+      if (dy > 0.18 && dy < 0.52 && Math.abs(dx) < (0.52 - dy) * 0.42) {
         r = 0; g = 240; b = 255;
       }
 

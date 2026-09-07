@@ -50,6 +50,37 @@ class VoxotronSoundEngine {
   private musicVolume: number = 0.50;
   private sfxVolume: number = 0.60;
   private sharedNoiseBuffer: AudioBuffer | null = null;
+  private isUnlocked: boolean = false;
+
+  constructor() {
+    this.setupUserInteractionUnlock();
+  }
+
+  private setupUserInteractionUnlock() {
+    if (typeof window === 'undefined') return;
+    const unlock = () => {
+      this.isUnlocked = true;
+      try {
+        if (!this.ctx) {
+          this.initContext();
+        }
+        if (this.ctx && this.ctx.state === 'suspended') {
+          this.ctx.resume().catch(() => {});
+        }
+      } catch (e) {
+        // Safe no-op
+      }
+      window.removeEventListener('touchstart', unlock, true);
+      window.removeEventListener('touchend', unlock, true);
+      window.removeEventListener('click', unlock, true);
+      window.removeEventListener('keydown', unlock, true);
+    };
+
+    window.addEventListener('touchstart', unlock, { capture: true, once: true, passive: true });
+    window.addEventListener('touchend', unlock, { capture: true, once: true, passive: true });
+    window.addEventListener('click', unlock, { capture: true, once: true, passive: true });
+    window.addEventListener('keydown', unlock, { capture: true, once: true, passive: true });
+  }
 
   private getSharedNoiseBuffer(): AudioBuffer | null {
     if (!this.ctx) return null;
@@ -65,44 +96,48 @@ class VoxotronSoundEngine {
   }
 
   private initContext() {
-    if (!this.ctx) {
-      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-      if (AudioCtx) {
-        this.ctx = new AudioCtx();
+    try {
+      if (!this.ctx) {
+        const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+        if (AudioCtx) {
+          this.ctx = new AudioCtx();
 
-        // 1. Studio-grade Dynamics Compressor prevents any digital clipping, pops or harsh spikes
-        this.compressor = this.ctx.createDynamicsCompressor();
-        this.compressor.threshold.setValueAtTime(-14, this.ctx.currentTime);
-        this.compressor.knee.setValueAtTime(25, this.ctx.currentTime);
-        this.compressor.ratio.setValueAtTime(8, this.ctx.currentTime);
-        this.compressor.attack.setValueAtTime(0.005, this.ctx.currentTime);
-        this.compressor.release.setValueAtTime(0.20, this.ctx.currentTime);
-        this.compressor.connect(this.ctx.destination);
+          // 1. Studio-grade Dynamics Compressor prevents any digital clipping, pops or harsh spikes
+          this.compressor = this.ctx.createDynamicsCompressor();
+          this.compressor.threshold.setValueAtTime(-14, this.ctx.currentTime);
+          this.compressor.knee.setValueAtTime(25, this.ctx.currentTime);
+          this.compressor.ratio.setValueAtTime(8, this.ctx.currentTime);
+          this.compressor.attack.setValueAtTime(0.005, this.ctx.currentTime);
+          this.compressor.release.setValueAtTime(0.20, this.ctx.currentTime);
+          this.compressor.connect(this.ctx.destination);
 
-        // 2. Master Gain
-        this.masterGain = this.ctx.createGain();
-        this.masterGain.gain.setValueAtTime(this.isMuted ? 0 : 1.0, this.ctx.currentTime);
-        this.masterGain.connect(this.compressor);
+          // 2. Master Gain
+          this.masterGain = this.ctx.createGain();
+          this.masterGain.gain.setValueAtTime(this.isMuted ? 0 : 1.0, this.ctx.currentTime);
+          this.masterGain.connect(this.compressor);
 
-        // 3. Music Bus: Warm Analog Low-pass Master Filter (cuts any harsh high frequencies above 3400Hz)
-        this.musicFilter = this.ctx.createBiquadFilter();
-        this.musicFilter.type = 'lowpass';
-        this.musicFilter.frequency.setValueAtTime(3400, this.ctx.currentTime);
-        this.musicFilter.Q.setValueAtTime(0.7, this.ctx.currentTime);
-        this.musicFilter.connect(this.masterGain);
+          // 3. Music Bus: Warm Analog Low-pass Master Filter (cuts any harsh high frequencies above 3400Hz)
+          this.musicFilter = this.ctx.createBiquadFilter();
+          this.musicFilter.type = 'lowpass';
+          this.musicFilter.frequency.setValueAtTime(3400, this.ctx.currentTime);
+          this.musicFilter.Q.setValueAtTime(0.7, this.ctx.currentTime);
+          this.musicFilter.connect(this.masterGain);
 
-        this.musicGain = this.ctx.createGain();
-        this.musicGain.gain.setValueAtTime(this.musicVolume, this.ctx.currentTime);
-        this.musicGain.connect(this.musicFilter);
+          this.musicGain = this.ctx.createGain();
+          this.musicGain.gain.setValueAtTime(this.musicVolume, this.ctx.currentTime);
+          this.musicGain.connect(this.musicFilter);
 
-        // 4. SFX Bus
-        this.sfxGain = this.ctx.createGain();
-        this.sfxGain.gain.setValueAtTime(this.sfxVolume, this.ctx.currentTime);
-        this.sfxGain.connect(this.masterGain);
+          // 4. SFX Bus
+          this.sfxGain = this.ctx.createGain();
+          this.sfxGain.gain.setValueAtTime(this.sfxVolume, this.ctx.currentTime);
+          this.sfxGain.connect(this.masterGain);
+        }
       }
-    }
-    if (this.ctx && this.ctx.state === 'suspended') {
-      this.ctx.resume();
+      if (this.ctx && this.ctx.state === 'suspended' && this.isUnlocked) {
+        this.ctx.resume().catch(() => {});
+      }
+    } catch (err) {
+      console.warn('[Voxotron Audio] AudioContext init safe catch:', err);
     }
   }
 

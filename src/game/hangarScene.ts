@@ -111,8 +111,8 @@ export class Hangar3DScene {
   constructor(container: HTMLDivElement, initialVehicle: VehicleDef, initialTheme: HangarBiomeTheme = 'neo_metropolis') {
     this.container = container;
     this.currentTheme = initialTheme;
-    const width = container.clientWidth || 600;
-    const height = container.clientHeight || 400;
+    const width = Math.max(container.clientWidth || (typeof window !== 'undefined' ? window.innerWidth : 320), 320);
+    const height = Math.max(container.clientHeight || (typeof window !== 'undefined' ? window.innerHeight : 400), 300);
 
     this.scene = new THREE.Scene();
     const cfg = THEME_CONFIGS[this.currentTheme];
@@ -123,9 +123,36 @@ export class Hangar3DScene {
     this.camera.position.set(0, 1.5, 4.2);
     this.camera.lookAt(0, 0.25, 0);
 
-    this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance' });
+    let rendererInstance: THREE.WebGLRenderer | null = null;
+    const rendererConfigs: THREE.WebGLRendererParameters[] = [
+      { antialias: true, alpha: false, powerPreference: 'default' },
+      { antialias: false, alpha: false, powerPreference: 'default' },
+      { antialias: false, alpha: false, powerPreference: 'low-power' },
+    ];
+
+    for (const conf of rendererConfigs) {
+      try {
+        rendererInstance = new THREE.WebGLRenderer(conf);
+        if (rendererInstance && rendererInstance.getContext()) break;
+      } catch (e) {
+        console.warn('[Hangar] WebGL renderer try failed:', e);
+      }
+    }
+
+    if (!rendererInstance) {
+      throw new Error('WebGL не поддерживается');
+    }
+    this.renderer = rendererInstance;
+
+    this.renderer.domElement.addEventListener(
+      'webglcontextlost',
+      (e) => {
+        e.preventDefault();
+      },
+      false,
+    );
     this.renderer.setSize(width, height);
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.45;
 
