@@ -293,6 +293,14 @@ async function startServer() {
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(process.cwd(), "dist");
+    // Serve manifest with correct MIME type
+    app.get(["/manifest.webmanifest", "/rush/manifest.webmanifest"], (_req, res) => {
+      res.type("application/manifest+json").sendFile(path.join(distPath, "manifest.webmanifest"));
+    });
+    // Serve Apple touch icon at root and subpath
+    app.get(["/apple-touch-icon.png", "/rush/apple-touch-icon.png"], (_req, res) => {
+      res.sendFile(path.join(distPath, "apple-touch-icon.png"));
+    });
     app.use(express.static(distPath));
     app.use("/rush", express.static(distPath));
     app.get(["*", "/rush/*"], (_req, res) => {

@@ -4,9 +4,13 @@ import path from 'path';
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
-export default defineConfig(() => {
+export default defineConfig(({ mode }) => {
+  const isDev = mode === 'development';
+  // Use '/rush/' base for production builds, or '/' for local dev
+  const base = process.env.VITE_BASE_PATH || (isDev ? '/' : '/rush/');
+
   return {
-    base: './',
+    base,
     plugins: [
       react(),
       tailwindcss(),
@@ -14,7 +18,7 @@ export default defineConfig(() => {
         registerType: 'autoUpdate',
         includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'icon.svg', 'pwa-192x192.png', 'pwa-512x512.png'],
         manifest: {
-          id: './',
+          id: '/rush/',
           name: 'UNLIMITED // RUSH',
           short_name: 'UNLIMITED',
           description: 'Киберпанк воксельная гоночная игра в стиле TRON на изгибающейся 360° магнитной трассе. Без тормозов, максимальная скорость и атмосферный неоновый город.',
@@ -22,23 +26,23 @@ export default defineConfig(() => {
           background_color: '#0d0f12',
           display: 'standalone',
           orientation: 'any',
-          start_url: './',
-          scope: './',
+          start_url: '/rush/',
+          scope: '/rush/',
           icons: [
             {
-              src: 'pwa-192x192.png',
+              src: '/rush/pwa-192x192.png',
               sizes: '192x192',
               type: 'image/png',
               purpose: 'any',
             },
             {
-              src: 'pwa-512x512.png',
+              src: '/rush/pwa-512x512.png',
               sizes: '512x512',
               type: 'image/png',
               purpose: 'any',
             },
             {
-              src: 'pwa-maskable-512x512.png',
+              src: '/rush/pwa-maskable-512x512.png',
               sizes: '512x512',
               type: 'image/png',
               purpose: 'maskable',
