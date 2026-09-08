@@ -400,27 +400,80 @@ export function createTubeObstacle(
       group.add(leftArrow, rightArrow);
     }
   } else if (type === 'energy_prism') {
-    // --- Floating Hyper Energy Prism (Collectible) ---
+    // --- 3D Golden Cyber Coin / Star (High-Visibility Collectible) ---
     const prismGroup = new THREE.Group();
     prismGroup.name = 'prism_body';
 
-    const prismCore = createNeonBox(0.85, 0.85, 0.85, '#00f0ff', 3.5);
-    prismCore.rotation.set(Math.PI / 4, Math.PI / 4, 0);
-    prismCore.position.y = 1.2;
-    prismGroup.add(prismCore);
+    const coinCore = new THREE.Group();
+    coinCore.name = 'coin_core';
+    coinCore.position.y = 1.25;
 
-    // Outer orbiting neon ring
-    const ringGeom = new THREE.TorusGeometry(1.2, 0.08, 8, 24);
-    const ringMat = new THREE.MeshBasicMaterial({
-      color: 0xfcee0a,
-      transparent: true,
-      opacity: 0.95,
+    // Thick 12-sided faceted gold coin cylinder
+    const coinGeom = new THREE.CylinderGeometry(1.15, 1.15, 0.34, 12);
+    coinGeom.rotateX(Math.PI / 2);
+    const goldMat = new THREE.MeshStandardMaterial({
+      color: 0xffcc00,
+      emissive: new THREE.Color(0xff8800),
+      emissiveIntensity: 0.7,
+      roughness: 0.15,
+      metalness: 0.9,
+      flatShading: true,
     });
-    const gyroRing = new THREE.Mesh(ringGeom, ringMat);
-    gyroRing.position.y = 1.2;
-    gyroRing.rotation.x = Math.PI / 2;
-    prismGroup.add(gyroRing);
+    const coin = new THREE.Mesh(coinGeom, goldMat);
+    coinCore.add(coin);
 
+    // Chamfered golden outer ring
+    const rimGeom = new THREE.TorusGeometry(1.12, 0.08, 8, 16);
+    const rimMat = new THREE.MeshBasicMaterial({ color: 0xfcee0a });
+    const rim = new THREE.Mesh(rimGeom, rimMat);
+    coinCore.add(rim);
+
+    // Embossed Cyber Star on Front Face (+Z)
+    const starGeom1 = new THREE.OctahedronGeometry(0.5, 0);
+    starGeom1.scale(1.0, 1.0, 0.15);
+    const starFront1 = new THREE.Mesh(starGeom1, rimMat);
+    starFront1.position.z = 0.19;
+    coinCore.add(starFront1);
+
+    const starGeom2 = new THREE.OctahedronGeometry(0.38, 0);
+    starGeom2.scale(1.0, 1.0, 0.15);
+    const starMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+    const starFront2 = new THREE.Mesh(starGeom2, starMat);
+    starFront2.rotation.z = Math.PI / 4;
+    starFront2.position.z = 0.2;
+    coinCore.add(starFront2);
+
+    // Embossed Cyber Star on Back Face (-Z)
+    const starBack1 = new THREE.Mesh(starGeom1, rimMat);
+    starBack1.position.z = -0.19;
+    coinCore.add(starBack1);
+
+    const starBack2 = new THREE.Mesh(starGeom2, starMat);
+    starBack2.rotation.z = Math.PI / 4;
+    starBack2.position.z = -0.2;
+    coinCore.add(starBack2);
+
+    prismGroup.add(coinCore);
+
+    // Orbiting Golden Sparkle Satellites
+    const sparklesGroup = new THREE.Group();
+    sparklesGroup.name = 'coin_sparkles';
+    sparklesGroup.position.y = 1.25;
+
+    const sparklePos = [
+      [1.6, 0, 0],
+      [-1.6, 0, 0],
+      [0, 1.55, 0.2],
+      [0, -1.55, -0.2],
+    ];
+    sparklePos.forEach(([x, y, z]) => {
+      const sGeom = new THREE.BoxGeometry(0.18, 0.18, 0.18);
+      const sMesh = new THREE.Mesh(sGeom, starMat);
+      sMesh.position.set(x, y, z);
+      sparklesGroup.add(sMesh);
+    });
+
+    prismGroup.add(sparklesGroup);
     group.add(prismGroup);
   }
 

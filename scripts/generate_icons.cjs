@@ -28,8 +28,9 @@ function makeChunk(type, data) {
   return Buffer.concat([len, body, crcBuf]);
 }
 
-function createCyberIconPNG(width, height, isMaskable = false) {
-  const stride = width * 4;
+function createCyberIconPNG(width, height, isMaskable = false, hasAlpha = false) {
+  const bytesPerPixel = hasAlpha ? 4 : 3;
+  const stride = width * bytesPerPixel;
   const rawData = Buffer.alloc((stride + 1) * height);
 
   const cx = width / 2;
@@ -39,19 +40,19 @@ function createCyberIconPNG(width, height, isMaskable = false) {
 
   for (let y = 0; y < height; y++) {
     const rowOffset = y * (stride + 1);
-    rawData[rowOffset] = 0; // Filter None
+    rawData[rowOffset] = 0; // Filter 0 (None)
 
     for (let x = 0; x < width; x++) {
-      const pxOffset = rowOffset + 1 + x * 4;
+      const pxOffset = rowOffset + 1 + x * bytesPerPixel;
       const dx = (x - cx) / (maxR * paddingRatio);
       const dy = (y - cy) / (maxR * paddingRatio);
       const dist = Math.sqrt(dx * dx + dy * dy);
 
-      // Solid dark cyberpunk background strictly matching #0d0f12
+      // Solid dark cyberpunk background strictly matching #0d0f12 (13, 15, 18)
       let r = 13;
       let g = 15;
       let b = 18;
-      let a = 255; // Strictly opaque (no alpha transparency for iOS apple-touch-icon compliance)
+      let a = 255;
 
       // Outer glowing ring
       if (Math.abs(dist - 0.78) < 0.055) {
@@ -93,20 +94,22 @@ function createCyberIconPNG(width, height, isMaskable = false) {
       rawData[pxOffset] = r;
       rawData[pxOffset + 1] = g;
       rawData[pxOffset + 2] = b;
-      rawData[pxOffset + 3] = a;
+      if (hasAlpha) {
+        rawData[pxOffset + 3] = a;
+      }
     }
   }
 
   const ihdr = Buffer.alloc(13);
   ihdr.writeUInt32BE(width, 0);
   ihdr.writeUInt32BE(height, 4);
-  ihdr[8] = 8; // Bit depth
-  ihdr[9] = 6; // ColorType RGBA
-  ihdr[10] = 0; // Compression
-  ihdr[11] = 0; // Filter
-  ihdr[12] = 0; // Interlace
+  ihdr[8] = 8; // Bit depth: 8 bits per sample
+  ihdr[9] = hasAlpha ? 6 : 2; // ColorType 2 = RGB (24-bit Truecolor, no alpha), 6 = RGBA (32-bit)
+  ihdr[10] = 0; // Compression (deflate)
+  ihdr[11] = 0; // Filter (standard)
+  ihdr[12] = 0; // Interlace (none)
 
-  const compressedData = zlib.deflateSync(rawData);
+  const compressedData = zlib.deflateSync(rawData, { level: 9 });
 
   const pngSignature = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
   const ihdrChunk = makeChunk('IHDR', ihdr);
@@ -119,10 +122,15 @@ function createCyberIconPNG(width, height, isMaskable = false) {
 const pubDir = path.join(__dirname, '..', 'public');
 if (!fs.existsSync(pubDir)) fs.mkdirSync(pubDir, { recursive: true });
 
-fs.writeFileSync(path.join(pubDir, 'pwa-192x192.png'), createCyberIconPNG(192, 192, false));
-fs.writeFileSync(path.join(pubDir, 'pwa-512x512.png'), createCyberIconPNG(512, 512, false));
-fs.writeFileSync(path.join(pubDir, 'pwa-maskable-512x512.png'), createCyberIconPNG(512, 512, true));
-fs.writeFileSync(path.join(pubDir, 'apple-touch-icon.png'), createCyberIconPNG(180, 180, false));
-fs.writeFileSync(path.join(pubDir, 'favicon.ico'), createCyberIconPNG(64, 64, false));
+// Generate 24-bit RGB Truecolor solid PNGs for apple-touch-icon (Strictly compliant with iOS Safari requirements)
+const appleTouchIcon = createCyberIconPNG(180, 180, false, false);
+fs.writeFileSync(path.join(pubDir, 'apple-touch-icon.png'), appleTouchIcon);
+fs.writeFileSync(path.join(pubDir, 'apple-touch-icon-precomposed.png'), appleTouchIcon);
+
+// Standard PWA icons (24-bit RGB solid & maskable)
+fs.writeFileSync(path.join(pubDir, 'pwa-192x192.png'), createCyberIconPNG(192, 192, false, false));
+fs.writeFileSync(path.join(pubDir, 'pwa-512x512.png'), createCyberIconPNG(512, 512, false, false));
+fs.writeFileSync(path.join(pubDir, 'pwa-maskable-512x512.png'), createCyberIconPNG(512, 512, true, false));
+fs.writeFileSync(path.join(pubDir, 'favicon.ico'), createCyberIconPNG(64, 64, false, false));
 
 console.log('Successfully generated all PWA PNG icons!');

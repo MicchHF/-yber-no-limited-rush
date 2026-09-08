@@ -290,6 +290,67 @@ const sharedMats = {
     transparent: true,
     opacity: 0.98,
   }),
+  goldCoinBody: new THREE.MeshStandardMaterial({
+    color: 0xffcc00,
+    emissive: new THREE.Color(0xff8800),
+    emissiveIntensity: 0.7,
+    roughness: 0.15,
+    metalness: 0.9,
+    flatShading: true,
+  }),
+  goldStarGlow: new THREE.MeshBasicMaterial({
+    color: 0xffffff,
+    transparent: true,
+    opacity: 0.98,
+  }),
+  goldHaloRing: new THREE.MeshBasicMaterial({
+    color: 0xffcc00,
+    transparent: true,
+    opacity: 0.85,
+  }),
+  frostBladeMat: new THREE.MeshStandardMaterial({
+    color: 0x67e8f9,
+    emissive: new THREE.Color(0x0284c7),
+    emissiveIntensity: 0.85,
+    roughness: 0.15,
+    metalness: 0.85,
+    flatShading: true,
+  }),
+  obsidianArmor: new THREE.MeshStandardMaterial({
+    color: 0x050b14,
+    emissive: new THREE.Color(0x021124),
+    emissiveIntensity: 0.5,
+    roughness: 0.25,
+    metalness: 0.9,
+    flatShading: true,
+  }),
+  iceWarningNeon: new THREE.MeshBasicMaterial({
+    color: 0xff3b00,
+    transparent: true,
+    opacity: 1.0,
+  }),
+  hazardProjectionMat: new THREE.MeshBasicMaterial({
+    color: 0xff1133,
+    transparent: true,
+    opacity: 0.55,
+    side: THREE.DoubleSide,
+    blending: THREE.AdditiveBlending,
+  }),
+  hazardAmberProjectionMat: new THREE.MeshBasicMaterial({
+    color: 0xff7700,
+    transparent: true,
+    opacity: 0.55,
+    side: THREE.DoubleSide,
+    blending: THREE.AdditiveBlending,
+  }),
+  hazardPlate: new THREE.MeshStandardMaterial({
+    map: getHazardPlateTexture('#ff0044'),
+    emissiveMap: getHazardPlateTexture('#ff0044'),
+    emissive: new THREE.Color(0xffffff),
+    emissiveIntensity: 0.95,
+    roughness: 0.2,
+    metalness: 0.7,
+  }),
 };
 
 export const TUBE_RADIUS = 6.5;
@@ -302,6 +363,13 @@ export interface BlockedSectorArc {
   maxAngle: number;
 }
 
+export interface ChainedObstacleItem {
+  offsetZ: number;
+  type: CyberObstacleType;
+  angle: number;
+  result: CreatedObstacleResult;
+}
+
 export interface CreatedObstacleResult {
   group: THREE.Group;
   depthZ: number;
@@ -310,6 +378,8 @@ export interface CreatedObstacleResult {
   safeCenter?: number;
   isPickup?: boolean;
   movement?: ObstacleMovement;
+  chainedItems?: ChainedObstacleItem[];
+  totalSpanZ?: number;
 }
 
 export function isAngleInSector(angle: number, minA: number, maxA: number): boolean {
@@ -403,6 +473,56 @@ function addRunwayClearanceMarkers(group: THREE.Group, tubeR: number, openCenter
     );
     rail.rotation.z = sideA - Math.PI / 2;
     group.add(rail);
+  });
+}
+
+/**
+ * Projects a clear curved warning hazard zone directly onto the outer surface of the tube
+ * beneath dynamic obstacles (pendulums, saws, rotators).
+ */
+function addHazardProjectionArc(
+  group: THREE.Group,
+  tubeR: number,
+  centerAngle: number,
+  arcSpan: number,
+  depthZ: number,
+  colorType: 'red' | 'amber' = 'red'
+) {
+  const segs = 24;
+  const radius = tubeR + 0.04;
+  // Curved open ribbon hugging the cylinder track along Z
+  const arcGeom = new THREE.CylinderGeometry(
+    radius,
+    radius,
+    depthZ * 1.05,
+    segs,
+    1,
+    true,
+    -arcSpan * 0.5,
+    arcSpan
+  );
+  arcGeom.rotateX(Math.PI / 2);
+
+  const mat = colorType === 'red' ? sharedMats.hazardProjectionMat : sharedMats.hazardAmberProjectionMat;
+  const arcMesh = new THREE.Mesh(arcGeom, mat);
+  // Align arc around cylinder z-axis at centerAngle
+  arcMesh.rotation.z = centerAngle + Math.PI / 2;
+  group.add(arcMesh);
+
+  // Border guide rails in glowing neon red/amber at both edges of danger zone
+  [-arcSpan * 0.5, arcSpan * 0.5].forEach((offset) => {
+    const boundaryA = centerAngle + offset;
+    const boundaryRail = new THREE.Mesh(
+      new THREE.BoxGeometry(0.12, 0.12, depthZ * 1.08),
+      colorType === 'red' ? sharedMats.neonRed : sharedMats.neonOrange
+    );
+    boundaryRail.position.set(
+      Math.cos(boundaryA) * (tubeR + 0.06),
+      Math.sin(boundaryA) * (tubeR + 0.06),
+      0
+    );
+    boundaryRail.rotation.z = boundaryA - Math.PI / 2;
+    group.add(boundaryRail);
   });
 }
 
@@ -935,49 +1055,99 @@ export function buildBoostPad(angle: number): CreatedObstacleResult {
 }
 
 // ============================================================================
-// PICKUP 2: ENERGY PRISM (High-visibility collectible with vertical sky beacon)
+// PICKUP 2: GOLDEN CYBER COIN / STAR (High-visibility collectible)
+// Unmistakable golden-amber coin with embossed star, orbiting sparkles & gold sky pillar
 // ============================================================================
 export function buildEnergyPrism(angle: number): CreatedObstacleResult {
   const group = new THREE.Group();
   const tubeR = 6.5;
   const depthZ = 2.4;
 
-  // 1. TALL VERTICAL SKY BEACON PILLAR (Visible from 150m+ down the tube!)
-  const beaconGeom = new THREE.CylinderGeometry(0.2, 0.6, 16, 8, 1, true);
-  const beacon = new THREE.Mesh(beaconGeom, sharedMats.skyPillar);
-  // Position cylinder so its base is at the surface and points outward away from tube center
-  beacon.position.set(Math.cos(angle) * (tubeR + 8.0), Math.sin(angle) * (tubeR + 8.0), 0);
+  // 1. TALL RADIANT GOLDEN SKY BEACON PILLAR (Visible from 200m+ down the tube!)
+  const beaconGeom = new THREE.CylinderGeometry(0.2, 0.7, 22, 8, 1, true);
+  const beacon = new THREE.Mesh(beaconGeom, sharedMats.skyPillarGold);
+  beacon.position.set(Math.cos(angle) * (tubeR + 11.0), Math.sin(angle) * (tubeR + 11.0), 0);
   beacon.rotation.z = angle - Math.PI / 2;
   group.add(beacon);
 
-  // 2. Ground Projector Ring on track surface
-  const groundRingGeom = new THREE.RingGeometry(0.8, 1.2, 16);
-  const groundRing = new THREE.Mesh(groundRingGeom, sharedMats.neonCyan);
-  groundRing.position.set(Math.cos(angle) * (tubeR + 0.06), Math.sin(angle) * (tubeR + 0.06), 0);
-  groundRing.rotation.z = angle - Math.PI / 2;
-  group.add(groundRing);
+  // 2. Ground Projector Halo & Concentric Target Ring on track surface
+  const groundHaloGeom = new THREE.RingGeometry(0.7, 1.4, 24);
+  const groundHalo = new THREE.Mesh(groundHaloGeom, sharedMats.goldHaloRing);
+  groundHalo.position.set(Math.cos(angle) * (tubeR + 0.05), Math.sin(angle) * (tubeR + 0.05), 0);
+  groundHalo.rotation.z = angle - Math.PI / 2;
+  group.add(groundHalo);
 
-  // 3. Central Hovering Diamond Crystal Body
+  const groundPulseGeom = new THREE.RingGeometry(1.45, 1.62, 24);
+  const groundPulse = new THREE.Mesh(groundPulseGeom, sharedMats.neonYellow);
+  groundPulse.position.set(Math.cos(angle) * (tubeR + 0.06), Math.sin(angle) * (tubeR + 0.06), 0);
+  groundPulse.rotation.z = angle - Math.PI / 2;
+  group.add(groundPulse);
+
+  // 3. Central Hovering 3D Golden Cyber Coin / Star Assembly
   const prismGroup = new THREE.Group();
   prismGroup.name = 'prism_body';
-  prismGroup.position.set(Math.cos(angle) * (tubeR + 1.1), Math.sin(angle) * (tubeR + 1.1), 0);
+  prismGroup.position.set(Math.cos(angle) * (tubeR + 1.25), Math.sin(angle) * (tubeR + 1.25), 0);
   prismGroup.rotation.z = angle - Math.PI / 2;
 
-  const prismGeom = new THREE.OctahedronGeometry(1.05, 0);
-  const prism = new THREE.Mesh(prismGeom, sharedMats.neonCyan);
-  prismGroup.add(prism);
+  // Sub-group coin_core for smooth levitation and rotation
+  const coinCore = new THREE.Group();
+  coinCore.name = 'coin_core';
 
-  // Inner hyper-white core
-  const coreGeom = new THREE.OctahedronGeometry(0.55, 0);
-  const core = new THREE.Mesh(coreGeom, sharedMats.neonWhite);
-  prismGroup.add(core);
+  // Thick 12-sided faceted gold coin cylinder
+  const coinGeom = new THREE.CylinderGeometry(1.15, 1.15, 0.34, 12);
+  coinGeom.rotateX(Math.PI / 2);
+  const coin = new THREE.Mesh(coinGeom, sharedMats.goldCoinBody);
+  coinCore.add(coin);
 
-  // Orbiting gyroscope torus ring
-  const ringGeom = new THREE.TorusGeometry(1.5, 0.07, 8, 20);
-  const ring = new THREE.Mesh(ringGeom, sharedMats.neonYellow);
-  ring.rotation.x = Math.PI / 2.5;
-  prismGroup.add(ring);
+  // Chamfered golden outer ring
+  const rimGeom = new THREE.TorusGeometry(1.12, 0.08, 8, 16);
+  const rim = new THREE.Mesh(rimGeom, sharedMats.neonYellow);
+  coinCore.add(rim);
 
+  // Embossed Cyber Star on Front Face (+Z)
+  const starGeom1 = new THREE.OctahedronGeometry(0.5, 0);
+  starGeom1.scale(1.0, 1.0, 0.15);
+  const starFront1 = new THREE.Mesh(starGeom1, sharedMats.neonYellow);
+  starFront1.position.z = 0.19;
+  coinCore.add(starFront1);
+
+  const starGeom2 = new THREE.OctahedronGeometry(0.38, 0);
+  starGeom2.scale(1.0, 1.0, 0.15);
+  const starFront2 = new THREE.Mesh(starGeom2, sharedMats.goldStarGlow);
+  starFront2.rotation.z = Math.PI / 4;
+  starFront2.position.z = 0.2;
+  coinCore.add(starFront2);
+
+  // Embossed Cyber Star on Back Face (-Z)
+  const starBack1 = new THREE.Mesh(starGeom1, sharedMats.neonYellow);
+  starBack1.position.z = -0.19;
+  coinCore.add(starBack1);
+
+  const starBack2 = new THREE.Mesh(starGeom2, sharedMats.goldStarGlow);
+  starBack2.rotation.z = Math.PI / 4;
+  starBack2.position.z = -0.2;
+  coinCore.add(starBack2);
+
+  prismGroup.add(coinCore);
+
+  // Orbiting Golden Sparkle Satellites
+  const sparklesGroup = new THREE.Group();
+  sparklesGroup.name = 'coin_sparkles';
+
+  const sparklePos = [
+    [1.6, 0, 0],
+    [-1.6, 0, 0],
+    [0, 1.55, 0.2],
+    [0, -1.55, -0.2],
+  ];
+  sparklePos.forEach(([x, y, z]) => {
+    const sGeom = new THREE.BoxGeometry(0.18, 0.18, 0.18);
+    const sMesh = new THREE.Mesh(sGeom, sharedMats.goldStarGlow);
+    sMesh.position.set(x, y, z);
+    sparklesGroup.add(sMesh);
+  });
+
+  prismGroup.add(sparklesGroup);
   group.add(prismGroup);
 
   const arcSpan = 0.65; // radians
@@ -1101,10 +1271,21 @@ export function buildMagmaGrinder(baseAngle: number): CreatedObstacleResult {
     rim.position.y = tubeR + 0.6;
     bladeGroup.add(rim);
 
+    // Blazing track-level hazard cutting pad right at surface
+    const groundFootprintGeom = new THREE.BoxGeometry(1.6, 0.12, depthZ * 0.95);
+    const groundFootprint = new THREE.Mesh(groundFootprintGeom, sharedMats.magmaCore);
+    groundFootprint.position.y = tubeR + 0.05;
+    bladeGroup.add(groundFootprint);
+
     rotorGroup.add(bladeGroup);
   }
 
   group.add(rotorGroup);
+
+  // Orbit warning danger ring on tube surface
+  const orbitWarningGeom = new THREE.TorusGeometry(tubeR + 0.04, 0.12, 6, 36);
+  const orbitWarning = new THREE.Mesh(orbitWarningGeom, sharedMats.magmaCore);
+  group.add(orbitWarning);
 
   // Speed of rotation (clockwise or counter-clockwise)
   const rotSpeed = (Math.random() > 0.5 ? 1 : -1) * (0.65 + Math.random() * 0.35);
@@ -1186,34 +1367,50 @@ export function buildCryoPendulum(baseAngle: number): CreatedObstacleResult {
   const tubeR = 6.5;
   const depthZ = 3.8;
   const pendulumArc = 0.55; // radians width of pendulum bob
+  const sweepAmp = 0.65; // ~37 degrees oscillation each side
 
-  // Pendulum body attached to center pivot
+  // 1. Semi-transparent amber/red hazard projection arc on the tube surface
+  // Clearly demarcates the full sweep danger zone to incoming pilots
+  addHazardProjectionArc(group, tubeR, baseAngle, sweepAmp * 2.15, depthZ, 'amber');
+
+  // 2. Pendulum body attached to center pivot
   const pendulumGroup = new THREE.Group();
 
-  // Ice Crystal arm extending outward
-  const armGeom = new THREE.BoxGeometry(0.5, tubeR + 1.8, depthZ * 0.7);
-  const arm = new THREE.Mesh(armGeom, sharedMats.spokeDark);
+  // Dark obsidian heavy alloy arm extending outward
+  const armGeom = new THREE.BoxGeometry(0.55, tubeR + 1.8, depthZ * 0.7);
+  const arm = new THREE.Mesh(armGeom, sharedMats.obsidianArmor);
   arm.position.y = (tubeR + 1.8) * 0.5;
   pendulumGroup.add(arm);
 
-  // Heavy Glacial Crystal Bob at the cylinder track
-  const bobGeom = new THREE.BoxGeometry(1.8, 2.2, depthZ);
-  const bob = new THREE.Mesh(bobGeom, sharedMats.cryoIce);
-  bob.position.y = tubeR + 0.9;
-  pendulumGroup.add(bob);
+  // High-contrast Obsidian Heavy Armor Shell for Bob
+  const shellGeom = new THREE.BoxGeometry(2.0, 2.3, depthZ);
+  const shell = new THREE.Mesh(shellGeom, sharedMats.obsidianArmor);
+  shell.position.y = tubeR + 0.95;
+  pendulumGroup.add(shell);
 
-  // Glowing Frost Beacon
-  const beaconGeom = new THREE.BoxGeometry(2.0, 0.4, depthZ * 1.05);
-  const beacon = new THREE.Mesh(beaconGeom, sharedMats.neonCyan);
-  beacon.position.y = tubeR + 0.9;
-  pendulumGroup.add(beacon);
+  // High-contrast Glacial Crystal Core
+  const coreGeom = new THREE.BoxGeometry(1.5, 1.8, depthZ * 1.02);
+  const core = new THREE.Mesh(coreGeom, sharedMats.frostBladeMat);
+  core.position.y = tubeR + 0.95;
+  pendulumGroup.add(core);
+
+  // Vivid High-Visibility Hazard Orange Warning Crest
+  const crestGeom = new THREE.BoxGeometry(2.2, 0.35, depthZ * 1.05);
+  const crest = new THREE.Mesh(crestGeom, sharedMats.iceWarningNeon);
+  crest.position.y = tubeR + 0.95;
+  pendulumGroup.add(crest);
+
+  // Active ground hazard projection laser pad on track surface directly under bob
+  const groundLaserGeom = new THREE.BoxGeometry(2.2, 0.12, depthZ * 0.95);
+  const groundLaser = new THREE.Mesh(groundLaserGeom, sharedMats.iceWarningNeon);
+  groundLaser.position.y = tubeR + 0.05;
+  pendulumGroup.add(groundLaser);
 
   pendulumGroup.name = 'inner_rotor';
   pendulumGroup.rotation.z = baseAngle - Math.PI / 2;
   group.add(pendulumGroup);
 
   const sweepSpeed = 1.6 + Math.random() * 0.6;
-  const sweepAmp = 0.65; // ~37 degrees oscillation each side
 
   return {
     group,
@@ -1242,28 +1439,42 @@ export function buildGlacierSpikes(angle: number): CreatedObstacleResult {
   const clusterGroup = new THREE.Group();
   clusterGroup.rotation.z = angle - Math.PI / 2;
 
-  // 3 jagged icy teeth
+  // Dark high-contrast obsidian base mount on track surface
+  const baseGeom = new THREE.BoxGeometry(2.6, 0.35, depthZ);
+  const baseMesh = new THREE.Mesh(baseGeom, sharedMats.obsidianArmor);
+  baseMesh.position.y = tubeR + 0.12;
+  clusterGroup.add(baseMesh);
+
+  // High-visibility neon orange hazard warning strip along base
+  const baseStripeGeom = new THREE.BoxGeometry(2.7, 0.12, depthZ * 1.02);
+  const baseStripe = new THREE.Mesh(baseStripeGeom, sharedMats.iceWarningNeon);
+  baseStripe.position.y = tubeR + 0.06;
+  clusterGroup.add(baseStripe);
+
+  // 3 jagged icy teeth with obsidian backing and orange warning tips
   const offsets = [-0.65, 0, 0.65];
   offsets.forEach((xOff, i) => {
     const height = 2.4 + (i === 1 ? 0.9 : 0);
+
+    // Dark obsidian structural backing (ensures clear silhouette against snow/fog)
+    const spineGeom = new THREE.BoxGeometry(0.55, height * 0.85, 0.4);
+    const spine = new THREE.Mesh(spineGeom, sharedMats.obsidianArmor);
+    spine.position.set(xOff, tubeR + height * 0.4, -0.15);
+    clusterGroup.add(spine);
+
+    // Razor ice cone
     const spikeGeom = new THREE.ConeGeometry(0.65, height, 5);
-    const spike = new THREE.Mesh(spikeGeom, sharedMats.cryoIce);
+    const spike = new THREE.Mesh(spikeGeom, sharedMats.frostBladeMat);
     spike.position.set(xOff, tubeR + height * 0.45, 0);
-    spike.rotation.z = (Math.random() - 0.5) * 0.3;
+    spike.rotation.z = (Math.random() - 0.5) * 0.25;
     clusterGroup.add(spike);
 
-    // Glowing ice crest
-    const tipGeom = new THREE.ConeGeometry(0.3, 0.8, 5);
-    const tip = new THREE.Mesh(tipGeom, sharedMats.neonCyan);
+    // Blazing hazard orange warning tip
+    const tipGeom = new THREE.ConeGeometry(0.32, 0.9, 5);
+    const tip = new THREE.Mesh(tipGeom, sharedMats.iceWarningNeon);
     tip.position.set(xOff, tubeR + height * 0.8, 0);
     clusterGroup.add(tip);
   });
-
-  // Track warning base for high visibility
-  const baseGeom = new THREE.BoxGeometry(2.4, 0.25, depthZ);
-  const baseMesh = new THREE.Mesh(baseGeom, sharedMats.neonCyan);
-  baseMesh.position.y = tubeR + 0.1;
-  clusterGroup.add(baseMesh);
 
   group.add(clusterGroup);
 
@@ -1318,10 +1529,25 @@ export function buildQuantumRotator(baseAngle: number): CreatedObstacleResult {
     cap.position.y = tubeR + 0.6;
     armGroup.add(cap);
 
+    // Active track hazard projection pad at pylon base
+    const groundPad = new THREE.Mesh(
+      new THREE.BoxGeometry(1.6, 0.12, depthZ * 0.95),
+      sharedMats.neonPurple
+    );
+    groundPad.position.y = tubeR + 0.05;
+    armGroup.add(groundPad);
+
     rotorGroup.add(armGroup);
   }
 
   group.add(rotorGroup);
+
+  // Orbit danger ring on the tube surface
+  const hazardRing = new THREE.Mesh(
+    new THREE.TorusGeometry(tubeR + 0.04, 0.12, 6, 36),
+    sharedMats.neonPurple
+  );
+  group.add(hazardRing);
   const rotSpeed = (Math.random() > 0.5 ? 1 : -1) * (0.85 + Math.random() * 0.45);
 
   const blockedSectors: BlockedSectorArc[] = armAngles.map((a) =>
@@ -1481,6 +1707,8 @@ function buildPlasmaFirewall(angle: number): CreatedObstacleResult {
 
 // ============================================================================
 // 15. FROST SHARD GATE (CRYO VOID - Rotating Razor Ice Crystals)
+// High-performance: zero dynamic MeshPhysicalMaterial allocations, dark obsidian spines,
+// vivid neon warning tips, and ground hazard orbit ring.
 // ============================================================================
 function buildFrostShardGate(angle: number): CreatedObstacleResult {
   const group = new THREE.Group();
@@ -1489,41 +1717,59 @@ function buildFrostShardGate(angle: number): CreatedObstacleResult {
   const bladeArc = 0.28; // Calibrated fair collision arc (~16 degrees)
   const numBlades = 3;
 
+  // 1. Hazard warning danger ring on the tube surface
+  const hazardRingGeom = new THREE.TorusGeometry(tubeR + 0.04, 0.12, 6, 36);
+  const hazardRing = new THREE.Mesh(hazardRingGeom, sharedMats.iceWarningNeon);
+  group.add(hazardRing);
+
   const rotor = new THREE.Group();
   rotor.name = 'inner_rotor';
   rotor.rotation.z = angle - Math.PI / 2;
-
-  const iceMat = new THREE.MeshPhysicalMaterial({
-    color: 0x99f6e4,
-    emissive: 0x00e5ff,
-    emissiveIntensity: 0.75,
-    roughness: 0.1,
-    transmission: 0.7,
-    thickness: 1.2,
-  });
 
   for (let i = 0; i < numBlades; i++) {
     const bladeGroup = new THREE.Group();
     const bladeAngle = (i / numBlades) * Math.PI * 2;
     bladeGroup.rotation.z = bladeAngle;
 
-    const bladeGeom = new THREE.ConeGeometry(0.55, 4.6, 5);
-    bladeGeom.scale(1.0, 1.0, 0.4);
-    const blade = new THREE.Mesh(bladeGeom, iceMat);
+    // Dark obsidian structural spine (ensures sharp silhouette against fog/ice track)
+    const spineGeom = new THREE.BoxGeometry(0.55, 4.8, 0.45);
+    const spine = new THREE.Mesh(spineGeom, sharedMats.obsidianArmor);
+    spine.position.y = tubeR + 1.8;
+    bladeGroup.add(spine);
+
+    // Razor ice crystal facet (high-performance shared standard material)
+    const bladeGeom = new THREE.ConeGeometry(0.65, 4.8, 5);
+    bladeGeom.scale(1.0, 1.0, 0.35);
+    const blade = new THREE.Mesh(bladeGeom, sharedMats.frostBladeMat);
     blade.position.y = tubeR + 1.8;
     blade.rotation.z = Math.PI;
 
-    // Glowing frosty needle tip
-    const tip = new THREE.Mesh(new THREE.OctahedronGeometry(0.35), sharedMats.iceGlow);
-    tip.position.y = 2.4;
+    // Vivid high-visibility hazard orange warning needle tip
+    const tip = new THREE.Mesh(new THREE.OctahedronGeometry(0.4), sharedMats.iceWarningNeon);
+    tip.position.y = 2.5;
     blade.add(tip);
 
     bladeGroup.add(blade);
+
+    // Active ground hazard projection pad at blade outer tip on tube surface
+    const groundPad = new THREE.Mesh(
+      new THREE.BoxGeometry(1.6, 0.12, depthZ * 0.9),
+      sharedMats.iceWarningNeon
+    );
+    groundPad.position.y = tubeR + 0.05;
+    bladeGroup.add(groundPad);
+
     rotor.add(bladeGroup);
   }
 
-  // Central cryogenic condensation core
-  const core = new THREE.Mesh(new THREE.SphereGeometry(1.2, 12, 12), sharedMats.iceGlow);
+  // Central heavy obsidian hub
+  const hubGeom = new THREE.CylinderGeometry(1.2, 1.2, depthZ * 0.75, 12);
+  hubGeom.rotateX(Math.PI / 2);
+  const hub = new THREE.Mesh(hubGeom, sharedMats.obsidianArmor);
+  rotor.add(hub);
+
+  // Central cryogenic core
+  const core = new THREE.Mesh(new THREE.SphereGeometry(0.8, 12, 12), sharedMats.iceGlow);
   rotor.add(core);
 
   group.add(rotor);
@@ -1688,12 +1934,12 @@ function buildCryoBlizzardVortex(baseAngle: number): CreatedObstacleResult {
 
   // Stasis crystal emitter base on the tube surface
   const baseGeom = new THREE.CylinderGeometry(0.7, 0.9, 1.4, 8);
-  const baseMesh = new THREE.Mesh(baseGeom, sharedMats.darkArmor);
+  const baseMesh = new THREE.Mesh(baseGeom, sharedMats.obsidianArmor);
   baseMesh.position.y = tubeR + 0.7;
   vortexGroup.add(baseMesh);
 
   // Ground warning stasis pad defining collision boundary clearly
-  const pad = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.15, depthZ), sharedMats.icePlate);
+  const pad = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.15, depthZ), sharedMats.iceWarningNeon);
   pad.position.y = tubeR + 0.05;
   vortexGroup.add(pad);
 
@@ -1709,10 +1955,15 @@ function buildCryoBlizzardVortex(baseAngle: number): CreatedObstacleResult {
   // 4 Razor Frost Spikes jutting inward
   for (let i = 0; i < 4; i++) {
     const a = (i / 4) * Math.PI * 2;
-    const spike = new THREE.Mesh(new THREE.ConeGeometry(0.25, 1.2, 5), sharedMats.icePlate);
+    const spike = new THREE.Mesh(new THREE.ConeGeometry(0.25, 1.2, 5), sharedMats.frostBladeMat);
     spike.position.set(Math.cos(a) * 1.6, Math.sin(a) * 1.6, 0);
     spike.rotation.z = a + Math.PI / 2;
     rotor.add(spike);
+
+    // Hazard neon warning tip
+    const tip = new THREE.Mesh(new THREE.OctahedronGeometry(0.2), sharedMats.iceWarningNeon);
+    tip.position.set(Math.cos(a) * 1.1, Math.sin(a) * 1.1, 0);
+    rotor.add(tip);
   }
 
   vortexGroup.add(rotor);
@@ -1906,8 +2157,460 @@ function buildQuantumMine(angle: number): CreatedObstacleResult {
   return { group, depthZ, primaryAngle: angle, blockedSectors: [makeSector(angle, arcSpan * 0.5)] };
 }
 
+// ============================================================================
+// 21. FLOW & SLALOM CORRIDORS (CHEVRON INDICATOR HELPER)
+// ============================================================================
+function addSlalomChevrons(
+  parentGroup: THREE.Group,
+  tubeR: number,
+  angle: number,
+  direction: 'left' | 'right',
+  leadStartZ: number = -3.8,
+  count: number = 3
+) {
+  const arrowGroup = new THREE.Group();
+  arrowGroup.rotation.z = angle - Math.PI / 2;
+
+  const sign = direction === 'right' ? 1 : -1;
+  const barGeom = new THREE.BoxGeometry(0.7, 0.08, 0.22);
+  const glowMat = sharedMats.neonYellow;
+  const cyanMat = sharedMats.neonCyan;
+
+  for (let c = 0; c < count; c++) {
+    const zPos = leadStartZ + c * 1.5;
+    const chevron = new THREE.Group();
+    chevron.position.set(0, tubeR + 0.05, zPos);
+
+    // Forward angled wing
+    const wing1 = new THREE.Mesh(barGeom, c % 2 === 0 ? glowMat : cyanMat);
+    wing1.position.set(sign * 0.3, 0, -0.2);
+    wing1.rotation.y = sign * (Math.PI / 4.2);
+    chevron.add(wing1);
+
+    // Backward angled wing
+    const wing2 = new THREE.Mesh(barGeom, c % 2 === 0 ? glowMat : cyanMat);
+    wing2.position.set(sign * 0.3, 0, 0.2);
+    wing2.rotation.y = -sign * (Math.PI / 4.2);
+    chevron.add(wing2);
+
+    // Arrow tip beacon
+    const tip = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.1, 0.22), sharedMats.neonWhite);
+    tip.position.set(sign * 0.65, 0, 0);
+    chevron.add(tip);
+
+    arrowGroup.add(chevron);
+  }
+  parentGroup.add(arrowGroup);
+}
+
+// ============================================================================
+// 22. QUANTUM CORKSCREW TUNNEL («Квантовый штопор»)
+// 10-arch spiral corridor with continuous 360° roll trajectory & golden coins
+// ============================================================================
+function buildCorkscrewArchSlice(
+  archIndex: number,
+  safeAngle: number,
+  openArc: number,
+  depthZ: number = 2.4
+): CreatedObstacleResult {
+  const group = new THREE.Group();
+  const tubeR = TUBE_RADIUS;
+
+  const archGroup = new THREE.Group();
+  archGroup.rotation.z = safeAngle - Math.PI / 2;
+
+  const blockedAngleSpan = Math.PI * 2 - openArc;
+  const startAngle = openArc * 0.5;
+
+  // 1. Heavy dark obsidian / carbon outer rib
+  const ribGeom = new THREE.TorusGeometry(tubeR + 0.85, 0.44, 6, 28, blockedAngleSpan);
+  const ribMesh = new THREE.Mesh(ribGeom, sharedMats.obsidianArmor);
+  ribMesh.rotation.z = startAngle;
+  archGroup.add(ribMesh);
+
+  // 2. High-intensity neon energy inner rim
+  const neonGeom = new THREE.TorusGeometry(tubeR + 0.74, 0.15, 6, 28, blockedAngleSpan);
+  const neonMat = archIndex % 2 === 0 ? sharedMats.neonCyan : sharedMats.neonPurple;
+  const neonMesh = new THREE.Mesh(neonGeom, neonMat);
+  neonMesh.rotation.z = startAngle;
+  archGroup.add(neonMesh);
+
+  // 3. Two massive anchor pylons flanking the open gateway
+  [-openArc * 0.5, openArc * 0.5].forEach((pylonAngle) => {
+    const pylon = new THREE.Group();
+    pylon.rotation.z = pylonAngle;
+
+    const baseGeom = new THREE.BoxGeometry(0.85, 2.0, depthZ * 0.85);
+    const baseMesh = new THREE.Mesh(baseGeom, sharedMats.darkArmor);
+    baseMesh.position.y = tubeR + 1.0;
+    pylon.add(baseMesh);
+
+    const plateGeom = new THREE.BoxGeometry(0.9, 0.8, depthZ * 0.9);
+    const plate = new THREE.Mesh(plateGeom, sharedMats.hazardPlate);
+    plate.position.y = tubeR + 1.1;
+    pylon.add(plate);
+
+    const beacon = new THREE.Mesh(new THREE.OctahedronGeometry(0.32), sharedMats.neonYellow);
+    beacon.position.y = tubeR + 2.1;
+    pylon.add(beacon);
+
+    archGroup.add(pylon);
+  });
+
+  // 4. Safe gateway runway lighting on the tube surface in the open sector
+  const runwayGeom = new THREE.BoxGeometry(0.18, 0.08, depthZ * 0.95);
+  [-openArc * 0.42, openArc * 0.42].forEach((xOff) => {
+    const light = new THREE.Mesh(runwayGeom, sharedMats.neonGreen);
+    light.position.set(xOff * tubeR, tubeR + 0.04, 0);
+    archGroup.add(light);
+  });
+
+  group.add(archGroup);
+
+  const blockedCenter = normalizeAngle(safeAngle + Math.PI);
+  const blockedHalfArc = (Math.PI * 2 - openArc) * 0.5;
+
+  return {
+    group,
+    depthZ,
+    primaryAngle: blockedCenter,
+    safeCenter: safeAngle,
+    blockedSectors: [makeSector(blockedCenter, blockedHalfArc)],
+  };
+}
+
+export function buildSpiralCorkscrewTunnel(baseAngle: number): CreatedObstacleResult {
+  const masterGroup = new THREE.Group();
+  const numArches = 10;
+  const stepZ = 4.4;
+  const depthZ = 2.4;
+  const openArc = 1.35; // ~77 degrees safe passage
+  const dir = Math.random() > 0.5 ? 1 : -1;
+  const stepAngle = dir * (28 * Math.PI / 180); // ~28 degrees per arch (~280° total roll)
+
+  const chainedItems: ChainedObstacleItem[] = [];
+
+  for (let i = 0; i < numArches; i++) {
+    const offsetZ = i * stepZ;
+    const safeAngle = normalizeAngle(baseAngle + i * stepAngle);
+    const archResult = buildCorkscrewArchSlice(i, safeAngle, openArc, depthZ);
+
+    chainedItems.push({
+      offsetZ,
+      type: 'spiral_corkscrew_tunnel',
+      angle: safeAngle,
+      result: archResult,
+    });
+
+    // Golden cyber coins / stars placed between arches along the safe spiral curve
+    if (i < numArches - 1) {
+      const coinOffsetZ = offsetZ + stepZ * 0.5;
+      const coinAngle = normalizeAngle(baseAngle + (i + 0.5) * stepAngle);
+      const coinResult = buildEnergyPrism(coinAngle);
+
+      chainedItems.push({
+        offsetZ: coinOffsetZ,
+        type: 'energy_prism',
+        angle: coinAngle,
+        result: coinResult,
+      });
+    }
+
+    const sliceClone = archResult.group.clone();
+    sliceClone.position.z = offsetZ;
+    masterGroup.add(sliceClone);
+  }
+
+  const totalSpanZ = (numArches - 1) * stepZ + depthZ;
+  const initialBlockedCenter = normalizeAngle(baseAngle + Math.PI);
+  const initialBlockedHalfArc = (Math.PI * 2 - openArc) * 0.5;
+
+  return {
+    group: masterGroup,
+    depthZ: totalSpanZ,
+    primaryAngle: initialBlockedCenter,
+    safeCenter: baseAngle,
+    blockedSectors: [makeSector(initialBlockedCenter, initialBlockedHalfArc)],
+    chainedItems,
+    totalSpanZ,
+  };
+}
+
+// ============================================================================
+// 23. NEON SLALOM CHICANE («Неоновый слалом»)
+// 5 alternating left-right barriers with floor neon chevron turn indicators
+// ============================================================================
+function buildSlalomBarrierSlice(
+  barrierIndex: number,
+  barrierAngle: number,
+  turnDirection: 'left' | 'right',
+  depthZ: number = 3.2
+): CreatedObstacleResult {
+  const group = new THREE.Group();
+  const tubeR = TUBE_RADIUS;
+  const arcSpan = 1.15; // ~66 degrees blocked width
+
+  const barrierGroup = new THREE.Group();
+  barrierGroup.rotation.z = barrierAngle - Math.PI / 2;
+
+  // 1. Heavy obsidian reinforced pylon barrier body
+  const bodyGeom = new THREE.BoxGeometry(3.6, 2.2, depthZ * 0.85);
+  const body = new THREE.Mesh(bodyGeom, sharedMats.obsidianArmor);
+  body.position.y = tubeR + 1.1;
+  barrierGroup.add(body);
+
+  // 2. Front and rear hazard warning plates
+  [-depthZ * 0.43, depthZ * 0.43].forEach((zOff) => {
+    const plateGeom = new THREE.PlaneGeometry(3.5, 2.0);
+    const plate = new THREE.Mesh(plateGeom, sharedMats.hazardPlate);
+    plate.position.set(0, tubeR + 1.1, zOff);
+    if (zOff < 0) plate.rotation.y = Math.PI;
+    barrierGroup.add(plate);
+  });
+
+  // 3. High-voltage energy tripwire beam across the top
+  const wireGeom = new THREE.BoxGeometry(3.8, 0.25, depthZ * 0.95);
+  const wire = new THREE.Mesh(wireGeom, sharedMats.neonYellow);
+  wire.position.y = tubeR + 2.25;
+  barrierGroup.add(wire);
+
+  // 4. Ground warning hazard pad at barrier footprint
+  const groundPadGeom = new THREE.BoxGeometry(4.0, 0.12, depthZ * 1.05);
+  const groundPad = new THREE.Mesh(groundPadGeom, sharedMats.magmaCore);
+  groundPad.position.y = tubeR + 0.05;
+  barrierGroup.add(groundPad);
+
+  // 5. Pulsing top hazard beacon
+  const beacon = new THREE.Mesh(new THREE.OctahedronGeometry(0.42), sharedMats.iceWarningNeon);
+  beacon.position.y = tubeR + 2.6;
+  barrierGroup.add(beacon);
+
+  group.add(barrierGroup);
+
+  // 6. Neon arrow chevrons on track surface pointing toward the safe lane
+  addSlalomChevrons(group, tubeR, barrierAngle, turnDirection, -3.8, 3);
+
+  return {
+    group,
+    depthZ,
+    primaryAngle: barrierAngle,
+    blockedSectors: [makeSector(barrierAngle, arcSpan * 0.5)],
+  };
+}
+
+export function buildSlalomChicane(baseAngle: number): CreatedObstacleResult {
+  const masterGroup = new THREE.Group();
+  const numBarriers = 5;
+  const stepZ = 8.0;
+  const depthZ = 3.2;
+  const slalomOffset = 0.62; // ~35.5 degrees left / right
+  const startDir = Math.random() > 0.5 ? 1 : -1;
+
+  const chainedItems: ChainedObstacleItem[] = [];
+
+  for (let i = 0; i < numBarriers; i++) {
+    const offsetZ = i * stepZ;
+    const sign = (i % 2 === 0 ? 1 : -1) * startDir;
+    const barrierAngle = normalizeAngle(baseAngle + sign * slalomOffset);
+    const safeAngle = normalizeAngle(baseAngle - sign * slalomOffset);
+    const turnDir: 'left' | 'right' = sign > 0 ? 'left' : 'right';
+
+    const barrierResult = buildSlalomBarrierSlice(i, barrierAngle, turnDir, depthZ);
+
+    chainedItems.push({
+      offsetZ,
+      type: 'slalom_chicane',
+      angle: barrierAngle,
+      result: barrierResult,
+    });
+
+    // Reward coin at the apex of the slalom weave between barriers
+    if (i < numBarriers - 1) {
+      const coinOffsetZ = offsetZ + stepZ * 0.5;
+      const coinResult = buildEnergyPrism(safeAngle);
+      chainedItems.push({
+        offsetZ: coinOffsetZ,
+        type: 'energy_prism',
+        angle: safeAngle,
+        result: coinResult,
+      });
+    }
+
+    const sliceClone = barrierResult.group.clone();
+    sliceClone.position.z = offsetZ;
+    masterGroup.add(sliceClone);
+  }
+
+  const totalSpanZ = (numBarriers - 1) * stepZ + depthZ;
+
+  return {
+    group: masterGroup,
+    depthZ: totalSpanZ,
+    primaryAngle: baseAngle,
+    blockedSectors: [makeSector(normalizeAngle(baseAngle + startDir * slalomOffset), 0.58)],
+    chainedItems,
+    totalSpanZ,
+  };
+}
+
+// ============================================================================
+// 24. COMPRESSION SPEED TUNNEL («Ребристый туннель скорости»)
+// 10 closely spaced light rings leaving only a 90° opening, with midpoint turbo boost
+// ============================================================================
+function buildCompressionRingSlice(
+  ringIndex: number,
+  safeAngle: number,
+  openArc: number = Math.PI * 0.5,
+  depthZ: number = 2.0
+): CreatedObstacleResult {
+  const group = new THREE.Group();
+  const tubeR = TUBE_RADIUS;
+
+  const ringGroup = new THREE.Group();
+  ringGroup.rotation.z = safeAngle - Math.PI / 2;
+
+  const blockedAngleSpan = Math.PI * 2 - openArc; // 270 degrees
+  const startAngle = openArc * 0.5;
+
+  // 1. Heavy industrial outer compression rib
+  const ribGeom = new THREE.TorusGeometry(tubeR + 0.82, 0.46, 8, 32, blockedAngleSpan);
+  const ribMesh = new THREE.Mesh(ribGeom, sharedMats.obsidianArmor);
+  ribMesh.rotation.z = startAngle;
+  ringGroup.add(ribMesh);
+
+  // 2. High-intensity neon energy inner rib (vibrant alternating red / cyan)
+  const neonGeom = new THREE.TorusGeometry(tubeR + 0.72, 0.16, 8, 32, blockedAngleSpan);
+  const neonMat = ringIndex % 2 === 0 ? sharedMats.neonRed : sharedMats.neonCyan;
+  const neonMesh = new THREE.Mesh(neonGeom, neonMat);
+  neonMesh.rotation.z = startAngle;
+  ringGroup.add(neonMesh);
+
+  // 3. Massive hydraulic compression teeth extending inward from top of rib
+  const toothAngles = [Math.PI * 0.75, Math.PI * 1.0, Math.PI * 1.25];
+  toothAngles.forEach((tAngle) => {
+    const tooth = new THREE.Group();
+    tooth.rotation.z = tAngle;
+
+    const toothGeom = new THREE.ConeGeometry(0.55, 1.8, 5);
+    const toothMesh = new THREE.Mesh(toothGeom, sharedMats.darkArmor);
+    toothMesh.position.y = tubeR + 1.2;
+    toothMesh.rotation.z = Math.PI;
+    tooth.add(toothMesh);
+
+    const toothTip = new THREE.Mesh(new THREE.OctahedronGeometry(0.28), sharedMats.iceWarningNeon);
+    toothTip.position.y = tubeR + 0.3;
+    tooth.add(toothTip);
+
+    ringGroup.add(tooth);
+  });
+
+  // 4. Two glowing entrance gateway pylons flanking the 90° opening
+  [-openArc * 0.5, openArc * 0.5].forEach((postAngle) => {
+    const post = new THREE.Group();
+    post.rotation.z = postAngle;
+
+    const postGeom = new THREE.BoxGeometry(0.75, 2.2, depthZ * 0.9);
+    const postMesh = new THREE.Mesh(postGeom, sharedMats.darkArmor);
+    postMesh.position.y = tubeR + 1.1;
+    post.add(postMesh);
+
+    const postBeacon = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.4, depthZ * 0.95), sharedMats.neonYellow);
+    postBeacon.position.y = tubeR + 2.1;
+    post.add(postBeacon);
+
+    ringGroup.add(post);
+  });
+
+  // 5. Dual high-speed runway guide lines on the tube floor inside the 90° opening
+  const runwayGeom = new THREE.BoxGeometry(0.18, 0.08, depthZ * 0.95);
+  [-openArc * 0.38, openArc * 0.38].forEach((xOff) => {
+    const line = new THREE.Mesh(runwayGeom, sharedMats.neonCyan);
+    line.position.set(xOff * tubeR, tubeR + 0.04, 0);
+    ringGroup.add(line);
+  });
+
+  group.add(ringGroup);
+
+  const blockedCenter = normalizeAngle(safeAngle + Math.PI);
+  const blockedHalfArc = (Math.PI * 2 - openArc) * 0.5;
+
+  return {
+    group,
+    depthZ,
+    primaryAngle: blockedCenter,
+    safeCenter: safeAngle,
+    blockedSectors: [makeSector(blockedCenter, blockedHalfArc)],
+  };
+}
+
+export function buildCompressionSpeedTunnel(baseAngle: number): CreatedObstacleResult {
+  const masterGroup = new THREE.Group();
+  const numRibs = 10;
+  const stepZ = 3.6;
+  const depthZ = 2.0;
+  const openArc = Math.PI * 0.5; // Exactly 90° open sector
+
+  const chainedItems: ChainedObstacleItem[] = [];
+
+  for (let i = 0; i < numRibs; i++) {
+    const offsetZ = i * stepZ;
+    const ribResult = buildCompressionRingSlice(i, baseAngle, openArc, depthZ);
+
+    chainedItems.push({
+      offsetZ,
+      type: 'compression_speed_tunnel',
+      angle: baseAngle,
+      result: ribResult,
+    });
+
+    const sliceClone = ribResult.group.clone();
+    sliceClone.position.z = offsetZ;
+    masterGroup.add(sliceClone);
+  }
+
+  // Midpoint turbo boost pad inside the 90° gateway (at Rib #5)
+  const boostOffsetZ = 4.5 * stepZ;
+  const boostResult = buildBoostPad(baseAngle);
+  chainedItems.push({
+    offsetZ: boostOffsetZ,
+    type: 'boost_pad',
+    angle: baseAngle,
+    result: boostResult,
+  });
+
+  // Exit reward golden coin hovering right at the end of the speed tunnel
+  const exitOffsetZ = (numRibs - 0.5) * stepZ + 2.0;
+  const coinResult = buildEnergyPrism(baseAngle);
+  chainedItems.push({
+    offsetZ: exitOffsetZ,
+    type: 'energy_prism',
+    angle: baseAngle,
+    result: coinResult,
+  });
+
+  const totalSpanZ = (numRibs - 1) * stepZ + depthZ + 4.0;
+  const blockedCenter = normalizeAngle(baseAngle + Math.PI);
+  const blockedHalfArc = (Math.PI * 2 - openArc) * 0.5;
+
+  return {
+    group: masterGroup,
+    depthZ: totalSpanZ,
+    primaryAngle: blockedCenter,
+    safeCenter: baseAngle,
+    blockedSectors: [makeSector(blockedCenter, blockedHalfArc)],
+    chainedItems,
+    totalSpanZ,
+  };
+}
+
 export function createCyberObstacleGroup(type: string, angle: number): CreatedObstacleResult {
   switch (type) {
+    case 'spiral_corkscrew_tunnel':
+      return buildSpiralCorkscrewTunnel(angle);
+    case 'slalom_chicane':
+      return buildSlalomChicane(angle);
+    case 'compression_speed_tunnel':
+      return buildCompressionSpeedTunnel(angle);
     case 'spoke_wheel_gate':
       return buildSpokeWheelGate(angle);
     case 'half_disc_barrier':

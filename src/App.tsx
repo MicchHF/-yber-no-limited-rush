@@ -353,7 +353,7 @@ export default function App() {
   };
 
   return (
-    <main id="voxotron-app-root" className="relative w-screen min-h-[100dvh] h-[100dvh] overflow-hidden select-none bg-[#090b10]">
+    <main id="voxotron-app-root" className="relative w-screen min-h-[100dvh] h-full overflow-hidden select-none bg-[#090b10]">
       {/* 3D Cosmic Cylinder Viewport - Always mounted, zero flicker */}
       <GameCanvas
         vehicleDef={activeVehicle}

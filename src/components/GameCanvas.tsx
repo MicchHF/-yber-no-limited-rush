@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { AlertTriangle, RotateCcw, Trash2 } from 'lucide-react';
 import { VoxotronCylinderEngine, CylinderEngineCallbacks } from '../game/cylinderEngine';
 import { GameMode, LightingSettings, VehicleDef, GhostFrame } from '../types';
 
@@ -29,41 +30,44 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const engineRef = useRef<VoxotronCylinderEngine | null>(null);
-  const [initError, setInitError] = useState<string | null>(null);
+  const [engineError, setEngineError] = useState<string | null>(null);
 
   const onUpdateHUDRef = useRef(onUpdateHUD);
   onUpdateHUDRef.current = onUpdateHUD;
+
   const onGameOverRef = useRef(onGameOver);
   onGameOverRef.current = onGameOver;
+
   const onSectorPassedRef = useRef(onSectorPassed);
   onSectorPassedRef.current = onSectorPassed;
+
   const onGrazeTriggerRef = useRef(onGrazeTrigger);
   onGrazeTriggerRef.current = onGrazeTrigger;
+
   const onEngineReadyRef = useRef(onEngineReady);
   onEngineReadyRef.current = onEngineReady;
 
-  // Mount Three.js Cylinder Engine with delayed launch & Standalone protection
+  // Mount Three.js Cylinder Engine with deferred iOS Standalone layout safety
   useEffect(() => {
-    let isCancelled = false;
-    let ro: ResizeObserver | null = null;
+    let isDisposed = false;
     let timerId: any = null;
+    let ro: ResizeObserver | null = null;
+    let retryCount = 0;
 
     const startEngine = () => {
-      if (isCancelled || !containerRef.current) return;
+      if (isDisposed || !containerRef.current) return;
+      const el = containerRef.current;
 
-      const rect = containerRef.current.getBoundingClientRect();
-      const width = containerRef.current.clientWidth || rect.width || window.innerWidth;
-      const height = containerRef.current.clientHeight || rect.height || window.innerHeight;
-
-      // On iOS Standalone, during splash/transition viewport can briefly be 0
-      if ((width <= 0 || height <= 0) && typeof requestAnimationFrame !== 'undefined') {
-        timerId = setTimeout(startEngine, 80);
+      // On iOS 17 Standalone WebClip, clientWidth/clientHeight can be 0 initially until layout paint
+      if ((el.clientWidth === 0 || el.clientHeight === 0) && retryCount < 10) {
+        retryCount++;
+        timerId = setTimeout(startEngine, 60);
         return;
       }
 
       try {
         const engine = new VoxotronCylinderEngine(
-          containerRef.current,
+          el,
           vehicleDef,
           lighting,
           mode,
@@ -77,7 +81,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
           ghostData
         );
 
-        if (isCancelled) {
+        if (isDisposed) {
           engine.destroy();
           return;
         }
@@ -90,20 +94,18 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
             engineRef.current.handleResize();
           }
         });
-        ro.observe(containerRef.current);
+        ro.observe(el);
       } catch (err: any) {
-        console.error('[GameCanvas] 3D Engine Initialization Error:', err);
-        setInitError(err?.message || 'Не удалось запустить 3D-графику WebGL');
+        console.error('[Voxotron CylinderEngine Init Error]:', err);
+        setEngineError(err?.message || 'Не удалось запустить WebGL-графику на данном устройстве');
       }
     };
 
-    // Delayed start to ensure DOM and dimensions are fully settled (especially in iOS PWA / WebClip)
-    timerId = setTimeout(() => {
-      requestAnimationFrame(startEngine);
-    }, 100);
+    // 100ms deferred launch allows iOS standalone viewport and dimensions to initialize
+    timerId = setTimeout(startEngine, 100);
 
     return () => {
-      isCancelled = true;
+      isDisposed = true;
       if (timerId) clearTimeout(timerId);
       if (ro) ro.disconnect();
       if (engineRef.current) {
@@ -112,7 +114,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       }
       onEngineReadyRef.current(null);
     };
-  }, []); // Run once on mount!
+  }, []); // Run once on mount! Never destroy/recreate on HUD updates!
 
   // Update attract mode
   useEffect(() => {
@@ -135,13 +137,21 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     }
   }, [lighting]);
 
-  const handleHardReset = async () => {
+  const handleClearCacheAndRestart = async () => {
     try {
+      localStorage.clear();
+      sessionStorage.clear();
       if ('caches' in window) {
-        const keys = await caches.keys();
-        await Promise.all(keys.map((k) => caches.delete(k)));
+        const cacheNames = await caches.keys();
+        await Promise.all(cacheNames.map((name) => caches.delete(name)));
       }
-    } catch (_) {}
+      if ('serviceWorker' in navigator) {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(registrations.map((reg) => reg.unregister()));
+      }
+    } catch (e) {
+      // Safe no-op
+    }
     window.location.reload();
   };
 
@@ -151,30 +161,37 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       ref={containerRef}
       className="absolute inset-0 w-full h-full min-h-[100dvh] overflow-hidden select-none bg-[#090b10]"
     >
-      {initError && (
-        <div className="absolute inset-0 z-50 flex flex-col items-center justify-center p-6 bg-[#090b10]/95 text-center text-zinc-200">
-          <div className="w-16 h-16 mb-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-400 text-3xl font-black">
-            !
-          </div>
-          <h3 className="text-xl font-bold font-['Unbounded',sans-serif] text-rose-400 mb-2 tracking-wide">
-            СБОЙ ИНИЦИАЛИЗАЦИИ 3D
-          </h3>
-          <p className="text-sm text-zinc-400 max-w-sm mb-6 leading-relaxed">
-            {initError}. Графический контекст WebGL не смог запуститься.
-          </p>
-          <div className="flex flex-col sm:flex-row gap-3 w-full max-w-xs">
-            <button
-              onClick={() => window.location.reload()}
-              className="flex-1 py-3 px-4 rounded-xl bg-cyan-500 text-black font-bold text-sm tracking-wider uppercase shadow-lg shadow-cyan-500/20 active:scale-95 transition-transform"
-            >
-              Перезапустить
-            </button>
-            <button
-              onClick={handleHardReset}
-              className="flex-1 py-3 px-4 rounded-xl bg-zinc-800 border border-zinc-700 text-zinc-300 font-semibold text-xs tracking-wider uppercase hover:bg-zinc-700 active:scale-95 transition-transform"
-            >
-              Сбросить кэш
-            </button>
+      {engineError && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center p-6 bg-[#0d0f12]/95 backdrop-blur-md">
+          <div className="max-w-md w-full p-6 rounded-2xl bg-zinc-900/90 border border-red-500/40 shadow-2xl flex flex-col items-center text-center">
+            <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 mb-4">
+              <AlertTriangle className="w-8 h-8" />
+            </div>
+            <h2 className="text-xl font-bold font-mono tracking-tight text-white mb-2">
+              СБОЙ 3D РЕНДЕРА (STANDALONE)
+            </h2>
+            <p className="text-sm text-zinc-300 mb-3 font-sans leading-relaxed">
+              Не удалось создать WebGL контекст для ускорения графики.
+            </p>
+            <div className="w-full p-3 rounded-lg bg-black/60 border border-zinc-800 text-xs text-red-300 font-mono break-all mb-6 text-left max-h-24 overflow-y-auto">
+              {engineError}
+            </div>
+            <div className="w-full flex flex-col sm:flex-row gap-3">
+              <button
+                onClick={() => window.location.reload()}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black font-bold font-mono text-xs uppercase tracking-wider transition-colors"
+              >
+                <RotateCcw className="w-4 h-4" />
+                Повторить
+              </button>
+              <button
+                onClick={handleClearCacheAndRestart}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 font-bold font-mono text-xs uppercase tracking-wider transition-colors"
+              >
+                <Trash2 className="w-4 h-4 text-red-400" />
+                Сброс кэша
+              </button>
+            </div>
           </div>
         </div>
       )}

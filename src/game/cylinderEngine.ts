@@ -995,6 +995,39 @@ export class VoxotronCylinderEngine {
     const angle = this.trialPrng ? this.trialPrng() * Math.PI * 2 : Math.random() * Math.PI * 2;
     const created = createCyberObstacleGroup(selectedType, angle);
 
+    // Support sequential flow and slalom corridor obstacle chains (spiral corkscrew, chicane, compression tunnel)
+    if (created.chainedItems && created.chainedItems.length > 0) {
+      let maxZ = z;
+      for (const item of created.chainedItems) {
+        const itemZ = z + item.offsetZ;
+        maxZ = Math.max(maxZ, itemZ);
+        const itemCenter = cosmicTube.getCenter(itemZ);
+        const itemFrame = cosmicTube.getFrame(itemZ);
+        item.result.group.position.copy(itemCenter);
+
+        const rotMatrix = this._tempMat.makeBasis(itemFrame.right, itemFrame.up, itemFrame.forward);
+        item.result.group.setRotationFromMatrix(rotMatrix);
+
+        this.scene.add(item.result.group);
+
+        this.obstacles.push({
+          id: this.nextObstacleId++,
+          type: item.type,
+          mesh: item.result.group,
+          z: itemZ,
+          angle: item.result.primaryAngle ?? item.angle,
+          depthZ: item.result.depthZ,
+          blockedSectors: item.result.blockedSectors,
+          safeCenter: item.result.safeCenter,
+          isPickup: item.result.isPickup,
+          grazed: false,
+          movement: item.result.movement,
+        });
+      }
+      this.lastSpawnedObstacleZ = Math.max(this.lastSpawnedObstacleZ, maxZ);
+      return;
+    }
+
     // Position centered directly at the tube centerline with orthonormal frame orientation
     const center = cosmicTube.getCenter(z);
     const frame = cosmicTube.getFrame(z);
@@ -1792,12 +1825,27 @@ export class VoxotronCylinderEngine {
         vortexSpinner.rotateZ(2.8 * delta);
       }
 
-      // Rotate spinning collectibles
+      // Rotate & levitate spinning collectibles (Golden Coin / Star / Battery)
       if (obs.type === 'energy_prism' || obs.type === 'hyper_battery') {
         const body = obs.mesh.getObjectByName('prism_body');
         if (body) {
-          body.rotation.y += 0.05;
-          body.rotation.x += 0.02;
+          const coinCore = body.getObjectByName('coin_core');
+          if (coinCore) {
+            // Rapid smooth spin around Y axis
+            coinCore.rotation.y += 3.8 * delta;
+            // Smooth vertical hover levitation up and down
+            const hover = Math.sin((this.gameTimeMs + obs.id * 317) * 0.005) * 0.28;
+            coinCore.position.y = 1.25 + hover;
+          } else {
+            body.rotation.y += 3.5 * delta;
+          }
+          const sparkles = body.getObjectByName('coin_sparkles');
+          if (sparkles) {
+            sparkles.rotation.z -= 3.5 * delta;
+            sparkles.rotation.x += 1.6 * delta;
+            const hover = Math.sin((this.gameTimeMs + obs.id * 317) * 0.005) * 0.28;
+            sparkles.position.y = 1.25 + hover;
+          }
         }
       }
 
@@ -1852,8 +1900,8 @@ export class VoxotronCylinderEngine {
           this.scrapCollected += 3;
           this.cameraShakeIntensity = 0.2;
           sound.playPrismCollect();
-          this.triggerPickupFeedback('coin', '+50 КРЕДИТОВ!', 'ЭНЕРГО-ПРИЗМА СОБРАНА', '#00f0ff');
-          this.spawnPickupShockwave(obs.z, obs.angle, 0x00f0ff);
+          this.triggerPickupFeedback('coin', '+50 ЗОЛОТА!', 'КИБЕР-МОНЕТА СОБРАНА', '#ffcc00');
+          this.spawnPickupShockwave(obs.z, obs.angle, 0xffcc00);
           this.scene.remove(obs.mesh);
           this.disposeGroupDeep(obs.mesh);
           continue;
