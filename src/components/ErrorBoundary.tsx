@@ -36,10 +36,10 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
       if ('caches' in window) {
         caches.keys().then((names) => {
           names.forEach((name) => caches.delete(name));
-        });
+        }).catch(() => {});
       }
     } catch (e) {
-      console.error('Failed to clear storage:', e);
+      console.warn('Failed to clear storage:', e);
     }
     window.location.reload();
   };

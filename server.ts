@@ -253,7 +253,7 @@ apiRouter.get("/ghost-racers", (req, res) => {
 });
 
 // API: Daily Challenge info (Weekly landscape theme)
-apiRouter.get("/daily-info", (_req, res) => {
+const handleDailyInfo = (_req: express.Request, res: express.Response) => {
   const now = new Date();
   const dayOfYear = Math.floor((now.getTime() - new Date(now.getFullYear(), 0, 0).getTime()) / (1000 * 60 * 60 * 24));
   const weekNum = Math.ceil(dayOfYear / 7);
@@ -267,17 +267,18 @@ apiRouter.get("/daily-info", (_req, res) => {
 
   const currentTheme = weeklyThemes[weekNum % weeklyThemes.length];
 
-  res.json({
+  const payload = {
     seed: `vox_daily_${now.getFullYear()}_${now.getMonth() + 1}_${now.getDate()}`,
     dateString: now.toLocaleDateString("ru-RU"),
     weeklyTheme: currentTheme,
     bonusMultiplier: 1.5,
-  });
-});
+  };
 
-apiRouter.get("/daily-challenge", (_req, res) => {
-  res.redirect("/api/daily-info");
-});
+  res.json(payload);
+};
+
+apiRouter.get("/daily-info", handleDailyInfo);
+apiRouter.get("/daily-challenge", handleDailyInfo);
 
 // Mount API router for root /api and subpath /rush/api
 app.use("/api", apiRouter);

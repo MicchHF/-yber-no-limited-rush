@@ -193,6 +193,20 @@ export type CyberObstacleType =
   | 'spiral_corkscrew_tunnel'
   | 'slalom_chicane'
   | 'compression_speed_tunnel'
+  | 'vox_spiral_pillar_tunnel'
+  | 'colossal_rotating_spokes'
+  | 'colossal_voxel_fan'
+  | 'vox_archway_tunnel'
+  | 'vox_longitudinal_tunnel'
+  | 'vox_spiral_conduit'
+  | 'vox_slalom_pair'
+  | 'vox_slit_cascade'
+  | 'vox_aperture_iris'
+  | 'vox_dual_counter_rotator'
+  | 'vox_helix_corkscrew'
+  | 'vox_pinwheel_cross'
+  | 'vox_piston_press'
+  | 'vox_stepped_cascade'
   | 'boost_pad'
   | 'energy_prism'
   | 'hyper_battery'
@@ -204,7 +218,9 @@ export type CyberObstacleType =
   | 'shatter_barrier'
   | 'laser_gate'
   | 'magnetic_spire'
-  | 'plasma_cross';
+  | 'plasma_cross'
+  | 'lava_puddle_trap'
+  | 'ice_slick_patch';
 
 export interface BlockedSector {
   minAngle: number;
@@ -238,6 +254,13 @@ export interface ObstacleData {
   cleared?: boolean;
   safeCenter?: number;
   movement?: ObstacleMovement;
+  isLongitudinalTunnel?: boolean;
+  tunnelStartZ?: number;
+  tunnelEndZ?: number;
+  tunnelSafeHalfArc?: number;
+  tunnelTotalTwist?: number;
+  tunnelEntered?: boolean;
+  tunnelExited?: boolean;
 }
 
 export interface BiomeInfo {
@@ -254,6 +277,6 @@ export interface PickupFeedback {
   text: string;
   subtext?: string;
   color: string;
-  type: 'coin' | 'boost' | 'battery' | 'scrap';
+  type: 'coin' | 'boost' | 'battery' | 'scrap' | 'ice' | 'hazard';
   timestamp: number;
 }

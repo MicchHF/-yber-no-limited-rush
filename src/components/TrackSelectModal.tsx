@@ -77,7 +77,7 @@ export const TrackSelectModal: React.FC<TrackSelectModalProps> = ({
                 </span>
               </div>
               <p className="text-xs text-zinc-400 mt-0.5">
-                30 секунд бешеной скорости вокруг цилиндра: без лимитов скорости и тормозов!
+                Самый быстрый режим: взрывной разгон, гипер-скорость без лимитов и тормозов!
               </p>
               <div className="text-[11px] font-mono text-amber-400 font-bold mt-1">
                 Ваш рекорд: {profile.bestSprintScore.toLocaleString('ru-RU')} м

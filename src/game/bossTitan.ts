@@ -18,7 +18,10 @@ export type BossAttackType =
   | 'plasma_flurry'
   | 'pincer_strike'
   | 'chaotic_barrage'
-  | 'singularity_pulse';
+  | 'singularity_pulse'
+  | 'crossfire_helix'
+  | 'shockwave_line'
+  | 'mortar_rain';
 
 interface LaserBeamVisual {
   core: THREE.Mesh;
@@ -333,12 +336,17 @@ export class TitanBoss {
         attackDistanceOffset = -45;
         break;
       case 'lasers':
+      case 'crossfire_helix':
         // Pull back into high orbital altitude for sweeping laser vantage (275m - 290m ahead)
         attackDistanceOffset = 45;
         break;
+      case 'shockwave_line':
+      case 'mortar_rain':
+        attackDistanceOffset = -40;
+        break;
       case 'singularity_pulse':
       case 'chaotic_barrage':
-        attackDistanceOffset = -15;
+        attackDistanceOffset = -20;
         break;
       default:
         // Natural tactical hovering wave (+/- 20m)
@@ -453,8 +461,8 @@ export class TitanBoss {
    * High-Frequency Combat Execution Loop
    */
   private updateCombatLoop(delta: number, playerZ: number, playerAngle: number, predictedAngle: number) {
-    // Rest intervals between attacks are short and get shorter: 1.1s down to 0.35s!
-    const restInterval = Math.max(0.35, 1.15 - (this.currentPhase - 1) * 0.25);
+    // Dense, fast-paced rest intervals between attacks: 0.65s down to 0.18s in overdrive!
+    const restInterval = Math.max(0.18, 0.65 - (this.currentPhase - 1) * 0.15);
 
     if (this.currentAttack === 'none') {
       this.setLaserBeamsActive(false);
@@ -471,14 +479,14 @@ export class TitanBoss {
           this.currentAttack = 'pincer_strike';
         } else {
           if (this.currentPhase === 1) {
-            pool = ['plasma_flurry', 'lasers', 'carpet_bombs', 'singularity_pulse'];
+            pool = ['plasma_flurry', 'lasers', 'carpet_bombs', 'mortar_rain', 'singularity_pulse'];
           } else if (this.currentPhase === 2) {
-            pool = ['pincer_strike', 'plasma_flurry', 'carpet_bombs', 'lasers', 'singularity_pulse'];
+            pool = ['crossfire_helix', 'pincer_strike', 'mortar_rain', 'plasma_flurry', 'carpet_bombs', 'lasers', 'singularity_pulse'];
           } else if (this.currentPhase === 3) {
-            pool = ['chaotic_barrage', 'lasers', 'pincer_strike', 'plasma_flurry', 'carpet_bombs'];
+            pool = ['shockwave_line', 'crossfire_helix', 'chaotic_barrage', 'lasers', 'mortar_rain', 'pincer_strike', 'singularity_pulse'];
           } else {
-            // Overdrive Phase 4: relentless chaos & quad lasers
-            pool = ['chaotic_barrage', 'pincer_strike', 'lasers', 'plasma_flurry', 'carpet_bombs'];
+            // Overdrive Phase 4: relentless chaos, shockwaves, crossfire helix, and mortar bombardments!
+            pool = ['shockwave_line', 'crossfire_helix', 'chaotic_barrage', 'pincer_strike', 'lasers', 'mortar_rain', 'singularity_pulse', 'plasma_flurry'];
           }
           this.currentAttack = pool[this.nextAttackIndex % pool.length];
           this.nextAttackIndex++;
@@ -497,6 +505,10 @@ export class TitanBoss {
           this.handleLasers(delta, playerAngle);
           break;
 
+        case 'crossfire_helix':
+          this.handleCrossfireHelix(delta, playerAngle);
+          break;
+
         case 'carpet_bombs':
           this.handleCarpetBombs(delta, predictedAngle);
           break;
@@ -509,11 +521,16 @@ export class TitanBoss {
           this.handleChaoticBarrage(delta);
           break;
 
+        case 'shockwave_line':
+          this.handleShockwaveLine(delta, predictedAngle);
+          break;
+
+        case 'mortar_rain':
+          this.handleMortarRain(delta, predictedAngle);
+          break;
+
         case 'singularity_pulse':
-          if (this.attackPhaseTime > 1.8) {
-            this.currentAttack = 'none';
-            this.attackPhaseTime = 0;
-          }
+          this.handleSingularityPulse(delta, predictedAngle);
           break;
       }
     }
@@ -533,6 +550,11 @@ export class TitanBoss {
         sound.playBossLaserSweep();
         break;
 
+      case 'crossfire_helix':
+        this.attackWarning = '⚡ ПЕРЕКРЕСТНЫЙ ОРБИТАЛЬНЫЙ ЛАЗЕРНЫЙ ШТОРМ!';
+        sound.playBossLaserSweep();
+        break;
+
       case 'carpet_bombs':
         this.attackWarning = '⚠️ КОВРОВЫЙ СБРОС КЛАСТЕРНЫХ МИН!';
         sound.playBiomeEnemyDrop('quantum_horizon');
@@ -548,32 +570,42 @@ export class TitanBoss {
         sound.playBossWarning();
         break;
 
+      case 'shockwave_line':
+        this.attackWarning = '⚠️ КИНЕТИЧЕСКАЯ УДАРНАЯ ВОЛНА! ИЩИТЕ ПРОХОД!';
+        sound.playBossWarning();
+        break;
+
+      case 'mortar_rain':
+        this.attackWarning = '⚠️ АРТИЛЛЕРИЙСКИЙ МОРТИРНЫЙ ЗАЛП ПО СЕКТОРАМ!';
+        sound.playBiomeEnemyDrop('inferno_core');
+        break;
+
       case 'singularity_pulse':
-        this.attackWarning = '⚠️ ГРАВИТАЦИОННЫЙ ВСПЛЕСК ЯДРА!';
+        this.attackWarning = '⚠️ ГРАВИТАЦИОННЫЙ КОЛЛАПС: СИНГУЛЯРНЫЙ РАЗРЫВ!';
         sound.playGravityVortex();
         break;
     }
   }
 
   /**
-   * Attack 1: Rapid Predictive Plasma Flurry (3 to 5 bolts leading player)
+   * Attack 1: Rapid Predictive Plasma Flurry (3 to 6 high-speed bolts leading player)
    */
   private handlePlasmaFlurry(delta: number, predictedAngle: number) {
-    const totalShots = this.currentPhase >= 3 ? 5 : (this.currentPhase === 2 ? 4 : 3);
-    const shotInterval = 0.32;
+    const totalShots = this.currentPhase >= 3 ? 6 : (this.currentPhase === 2 ? 5 : 4);
+    const shotInterval = 0.22;
     const targetShot = Math.floor(this.attackPhaseTime / shotInterval);
 
     if (targetShot > this.plasmaShotCounter && this.plasmaShotCounter < totalShots) {
       this.plasmaShotCounter++;
-      // Leading spread angles: centers on predictedAngle with slight fan spread
-      const offset = (this.plasmaShotCounter - (totalShots + 1) / 2) * 0.28;
+      // Leading spread angles: centers on predictedAngle with fan spread
+      const offset = (this.plasmaShotCounter - (totalShots + 1) / 2) * 0.26;
       const shotAngle = predictedAngle + offset;
-      // Spawn plasma bolt well ahead of player at high speed (65 m/s)
-      this.callbacks?.onFirePlasma(this.z - 25, shotAngle, 65);
+      // Spawn plasma bolt well ahead of player at high speed (70 m/s)
+      this.callbacks?.onFirePlasma(this.z - 25, shotAngle, 70);
       sound.playPlasmaBeamFire();
     }
 
-    if (this.attackPhaseTime > totalShots * shotInterval + 0.4) {
+    if (this.attackPhaseTime > totalShots * shotInterval + 0.3) {
       this.currentAttack = 'none';
       this.attackPhaseTime = 0;
     }
@@ -715,6 +747,142 @@ export class TitanBoss {
     }
   }
 
+  /**
+   * Attack 6: Crossfire Helix (Criss-crossing scissors orbital lasers)
+   */
+  private handleCrossfireHelix(delta: number, playerAngle: number) {
+    const telegraphTime = 0.55;
+    const sweepDuration = 2.2;
+    const isTelegraph = this.attackPhaseTime < telegraphTime;
+    this.isLaserLethal = !isTelegraph;
+
+    // Laser beams cross over each other in scissors helix motion
+    const cycle = (this.attackPhaseTime - telegraphTime) * 2.6;
+    const scissorsProgress = Math.sin(cycle);
+
+    // Left and right laser beams sweep from opposite flanks through the center
+    this.laserVisuals[0].angle = this.angle - 0.95 + scissorsProgress * 1.5;
+    this.laserVisuals[0].active = true;
+
+    this.laserVisuals[1].angle = this.angle + 0.95 - scissorsProgress * 1.5;
+    this.laserVisuals[1].active = true;
+
+    if (this.currentPhase >= 3) {
+      // Additional flanking helix pincers in phase 3/4
+      this.laserVisuals[2].angle = this.angle - 1.8 + Math.cos(cycle) * 0.8;
+      this.laserVisuals[2].active = true;
+      this.laserVisuals[3].angle = this.angle + 1.8 - Math.cos(cycle) * 0.8;
+      this.laserVisuals[3].active = true;
+    } else {
+      this.laserVisuals[2].active = false;
+      this.laserVisuals[3].active = false;
+    }
+
+    if (isTelegraph) {
+      const pulse = 0.3 + Math.sin(this.attackPhaseTime * 22.0) * 0.18;
+      this.laserCoreMat.color.setHex(0xffffff);
+      this.laserHaloMat.color.setHex(0xffaa00);
+      this.groundDiscMat.color.setHex(0xffaa00);
+      this.laserCoreMat.opacity = pulse * 0.6;
+      this.laserHaloMat.opacity = pulse;
+      this.groundDiscMat.opacity = pulse * 1.4;
+    } else {
+      const lethalPulse = 0.9 + Math.sin(this.attackPhaseTime * 14.0) * 0.1;
+      this.laserCoreMat.color.setHex(0xffffff);
+      this.laserHaloMat.color.setHex(0xff0033);
+      this.groundDiscMat.color.setHex(0xff0033);
+      this.laserCoreMat.opacity = 0.98;
+      this.laserHaloMat.opacity = lethalPulse;
+      this.groundDiscMat.opacity = 0.98;
+    }
+
+    if (this.attackPhaseTime > telegraphTime + sweepDuration) {
+      this.setLaserBeamsActive(false);
+      this.currentAttack = 'none';
+      this.attackPhaseTime = 0;
+    }
+  }
+
+  /**
+   * Attack 7: Shockwave Line (transverse cluster wall with designated safe gap)
+   */
+  private handleShockwaveLine(delta: number, predictedAngle: number) {
+    if (this.mineWaveCounter === 0 && this.attackPhaseTime >= 0.35) {
+      this.mineWaveCounter = 1;
+      // 3 possible sectors: -0.75, 0, +0.75. Omit one at random so player has a clean evasion gap!
+      const safeSlot = Math.floor(Math.random() * 3);
+      const offsets = [-0.75, 0, 0.75].filter((_, idx) => idx !== safeSlot);
+      this.dropClusterMines(predictedAngle, offsets);
+    }
+
+    if (this.plasmaShotCounter === 0 && this.attackPhaseTime >= 0.75) {
+      this.plasmaShotCounter = 1;
+      // Follow-up snipe bolt aimed at player's trailing flank
+      const oppositeAngle = predictedAngle - Math.sign(this.playerAngularVelocity || 1) * 0.55;
+      this.callbacks?.onFirePlasma(this.z - 25, oppositeAngle, 68);
+      sound.playPlasmaBeamFire();
+    }
+
+    if (this.attackPhaseTime > 1.4) {
+      this.currentAttack = 'none';
+      this.attackPhaseTime = 0;
+    }
+  }
+
+  /**
+   * Attack 8: Mortar Rain (4 artillery rounds walking across track sectors)
+   */
+  private handleMortarRain(delta: number, predictedAngle: number) {
+    const shotInterval = 0.22;
+    const targetShot = Math.floor(this.attackPhaseTime / shotInterval);
+
+    if (targetShot > this.plasmaShotCounter && this.plasmaShotCounter < 4) {
+      this.plasmaShotCounter++;
+      let dropOffset = 0;
+      switch (this.plasmaShotCounter) {
+        case 1:
+          dropOffset = -0.65;
+          break;
+        case 2:
+          dropOffset = 0.65;
+          break;
+        case 3:
+          dropOffset = 0;
+          break;
+        case 4:
+          dropOffset = -Math.sign(this.playerAngularVelocity || 1) * 0.85;
+          break;
+      }
+      this.dropSingleMine(predictedAngle + dropOffset);
+      this.callbacks?.onFirePlasma(this.z - 25, predictedAngle + dropOffset, 65);
+      sound.playBiomeEnemyDrop('inferno_core');
+    }
+
+    if (this.attackPhaseTime > 1.35) {
+      this.currentAttack = 'none';
+      this.attackPhaseTime = 0;
+    }
+  }
+
+  /**
+   * Attack 9: Singularity Pulse (gravitational rift flank traps + hyper-speed central void spear)
+   */
+  private handleSingularityPulse(delta: number, predictedAngle: number) {
+    if (this.plasmaShotCounter === 0 && this.attackPhaseTime >= 0.35) {
+      this.plasmaShotCounter = 1;
+      // Twin flanking gravity rifts to pin player into the center
+      this.dropClusterMines(predictedAngle, [-0.72, 0.72]);
+      // Lightning-fast central void plasma spear (78 m/s) right down the central corridor!
+      this.callbacks?.onFirePlasma(this.z - 25, predictedAngle, 78);
+      sound.playGravityVortex();
+    }
+
+    if (this.attackPhaseTime > 1.3) {
+      this.currentAttack = 'none';
+      this.attackPhaseTime = 0;
+    }
+  }
+
   private dropClusterMines(centerAngle: number, offsetAngles: number[]) {
     sound.playBiomeEnemyDrop('quantum_horizon');
     offsetAngles.forEach((off) => {
@@ -831,7 +999,7 @@ export class TitanBoss {
    * 100% accurate collision check: matches visible beam angles on the ground
    */
   public checkLaserHit(playerZ: number, playerAngle: number): boolean {
-    if (this.currentAttack !== 'lasers' || !this.isLaserLethal) return false;
+    if ((this.currentAttack !== 'lasers' && this.currentAttack !== 'crossfire_helix') || !this.isLaserLethal) return false;
     // Check if player is traversing through the laser strike corridor
     if (playerZ < this.z - 260 || playerZ > this.z) return false;
 

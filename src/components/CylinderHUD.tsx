@@ -132,6 +132,11 @@ export const CylinderHUD: React.FC<CylinderHUDProps> = ({
             <span className="text-[11px] sm:text-xs font-bold text-zinc-400 tracking-wider">
               КМ/Ч
             </span>
+            {mode === 'sprint_30s' && (
+              <span className="ml-1 text-[9px] font-black tracking-wider px-1.5 py-0.5 rounded bg-amber-500/20 border border-amber-500/40 text-amber-300 uppercase animate-pulse">
+                ⚡ МАКС. РАЗГОН
+              </span>
+            )}
           </div>
 
           {/* Smoothness Mini Bar */}

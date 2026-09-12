@@ -19,7 +19,7 @@ import { NeonBikeTrail } from './trailSystem';
 import { CyberpunkCityEnvironment } from './cyberpunkWorld';
 import { getCyberTubeTexture } from './tubeTexture';
 import { sound } from '../services/sound';
-import { getBiomeForDistance, pickObstacleForBiome, BiomeConfig, BIOMES, isBossBiome, CYCLE_LENGTH, BOSS_START_DIST, BOSS_END_DIST } from './biomes';
+import { getBiomeForDistance, pickObstacleForBiome, BiomeConfig, BIOMES, isBossBiome, isBiomeTransitionZone, CYCLE_LENGTH, BOSS_START_DIST, BOSS_END_DIST } from './biomes';
 import { RivalInterceptor } from './rivalInterceptor';
 import { TitanBoss } from './bossTitan';
 import { getWeeklyTrials, WeeklyTrialConfig, createMulberry32 } from './weeklyTrials';
@@ -252,8 +252,9 @@ export class VoxotronCylinderEngine {
     life: number;
   }[] = [];
 
-  // Debuffs
+  // Debuffs & Traps
   private cryoFreezeTimer: number = 0;
+  private onIceSlickTimer: number = 0;
 
   // Pickup Notifications & Impact Shockwaves
   private currentPickupFeedback: (PickupFeedback & { expireAt: number }) | null = null;
@@ -348,7 +349,7 @@ export class VoxotronCylinderEngine {
     const width = Math.max(this.container.clientWidth || (typeof window !== 'undefined' ? window.innerWidth : 320), 320);
     const height = Math.max(this.container.clientHeight || (typeof window !== 'undefined' ? window.innerHeight : 480), 480);
 
-    this.camera = new THREE.PerspectiveCamera(65, width / height, 0.1, 1200);
+    this.camera = new THREE.PerspectiveCamera(74, width / height, 0.1, 1200);
 
     // Safe WebGL initialization with fallback for iOS Low Power Mode / restricted contexts
     let rendererInstance: THREE.WebGLRenderer | null = null;
@@ -397,8 +398,8 @@ export class VoxotronCylinderEngine {
       /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
       (typeof window !== 'undefined' && (window.innerWidth < 768 || window.innerHeight < 768));
     const pixelRatio = isMobileDevice
-      ? Math.min(window.devicePixelRatio || 1, 1.2) // Capped for stable 60 FPS on Retina iPhones
-      : Math.min(window.devicePixelRatio || 1, 1.5);
+      ? Math.min(window.devicePixelRatio || 1, 1.5)
+      : Math.min(window.devicePixelRatio || 1, 2.0);
     this.renderer.setPixelRatio(pixelRatio);
     this.renderer.setSize(width, height);
     this.renderer.domElement.style.width = '100%';
@@ -498,7 +499,6 @@ export class VoxotronCylinderEngine {
     const chunkGroup = new THREE.Group();
     const radialSegments = 28;
     const lengthSegments = 28;
-    const r = cosmicTube.RADIUS;
 
     const vertexCount = (lengthSegments + 1) * (radialSegments + 1);
     const positions = new Float32Array(vertexCount * 3);
@@ -512,6 +512,7 @@ export class VoxotronCylinderEngine {
     for (let i = 0; i <= lengthSegments; i++) {
       const frac = i / lengthSegments;
       const z = startZ + frac * length;
+      const r = cosmicTube.getRadius(z);
       const center = cosmicTube.getCenter(z);
       const { right, up } = cosmicTube.getFrame(z);
 
@@ -601,7 +602,8 @@ export class VoxotronCylinderEngine {
       const ringFrame = cosmicTube.getFrame(ringZ);
 
       // Sleek glowing neon contour hugging the cylinder surface
-      const ringGeom = new THREE.TorusGeometry(r + 0.03, 0.05, 6, 36);
+      const currentR = cosmicTube.getRadius(ringZ);
+      const ringGeom = new THREE.TorusGeometry(currentR + 0.03, 0.05, 6, 36);
       const ringMesh = new THREE.Mesh(ringGeom, this.sharedRingMat);
       ringMesh.position.copy(ringCenter);
 
@@ -741,9 +743,10 @@ export class VoxotronCylinderEngine {
     // Lateral vector pointing to the bike's right wing (outwardNormal x tangent = lateral, det = +1)
     const lateral = new THREE.Vector3().crossVectors(outwardNormal, tangent).normalize();
 
-    // Solid magnetic adherence to track (slightest micro-bank of ~2 degrees max) - no spinning or deep tipping
-    const maxBank = 0.04;
-    const targetBank = Math.max(-maxBank, Math.min(maxBank, -this.bikeAngularVelocity * 0.02));
+    // Solid magnetic adherence to track (slightest micro-bank) - on ice slick, introduces drift yaw slide!
+    const maxBank = this.onIceSlickTimer > 0 ? 0.12 : 0.04;
+    const bankFactor = this.onIceSlickTimer > 0 ? 0.08 : 0.02;
+    const targetBank = Math.max(-maxBank, Math.min(maxBank, -this.bikeAngularVelocity * bankFactor));
     this.currentBankAngle = THREE.MathUtils.lerp(this.currentBankAngle, targetBank, Math.min(1.0, 10 * delta));
 
     const bankedNormal = outwardNormal.clone().applyAxisAngle(tangent, this.currentBankAngle);
@@ -765,12 +768,13 @@ export class VoxotronCylinderEngine {
       this.currentSpeedClass === 'OVERDRIVE' ? 1.15 : 0.8
     );
 
-    // Animate rear rocket thruster plume
+    // Animate rear rocket thruster plume: scales with speed and boost
     const plume = this.bikeMesh.getObjectByName('thruster_plume');
     if (plume) {
+      const speedScale = 1.0 + Math.min(1.6, Math.max(0, (this.speedKmh - 200) / 480));
       const scaleBoost = this.inputBoost ? 1.6 : 1.0;
-      const flicker = 0.9 + Math.random() * 0.25;
-      plume.scale.set(1.0, 1.0, scaleBoost * flicker);
+      const flicker = 0.92 + Math.random() * 0.22;
+      plume.scale.set(1.0, 1.0, speedScale * scaleBoost * flicker);
     }
   }
 
@@ -792,9 +796,10 @@ export class VoxotronCylinderEngine {
 
   private getObstacleStepAtZ(z: number): number {
     const diff = this.getDifficultyFactor(z);
-    // Spacing scales from ~115m - 155m in early game down to ~58m - 76m at peak 12,000m
-    const base = THREE.MathUtils.lerp(115, 58, diff);
-    const jitter = THREE.MathUtils.lerp(40, 18, diff);
+    // Optimized spacious obstacle rhythm: scales from ~135m - 175m in early game down to ~95m - 130m at peak difficulty.
+    // Gives players breathing room and clear sightlines, preventing crowded visual clutter and overlapping hazards.
+    const base = THREE.MathUtils.lerp(135, 95, diff);
+    const jitter = THREE.MathUtils.lerp(40, 35, diff);
     const rand = this.trialPrng ? this.trialPrng() : Math.random();
     return base + rand * jitter;
   }
@@ -820,7 +825,7 @@ export class VoxotronCylinderEngine {
     }
   }
 
-  private triggerPickupFeedback(type: 'coin' | 'boost' | 'battery' | 'scrap', text: string, subtext: string, color: string) {
+  private triggerPickupFeedback(type: PickupFeedback['type'], text: string, subtext: string, color: string) {
     this.currentPickupFeedback = {
       id: Date.now() + Math.random(),
       type,
@@ -951,7 +956,7 @@ export class VoxotronCylinderEngine {
         const rand = this.trialPrng ? this.trialPrng() : Math.random();
         const selectedType: CyberObstacleType = rand > 0.5 ? 'boost_pad' : 'energy_prism';
         const angle = this.trialPrng ? this.trialPrng() * Math.PI * 2 : Math.random() * Math.PI * 2;
-        const created = createCyberObstacleGroup(selectedType, angle);
+        const created = createCyberObstacleGroup(selectedType, angle, z, this.currentBiomeId);
 
         const center = cosmicTube.getCenter(z);
         const frame = cosmicTube.getFrame(z);
@@ -984,6 +989,11 @@ export class VoxotronCylinderEngine {
       if (rand > 0.4) return;
     }
 
+    // User requirement: At biome transitions there is ONLY narrowing or widening without any obstacles
+    if (isBiomeTransitionZone(z)) {
+      return;
+    }
+
     const biome = this.getEffectiveBiome(z);
     const diff = this.getDifficultyFactor(z);
     const selectedType = pickObstacleForBiome(
@@ -993,9 +1003,9 @@ export class VoxotronCylinderEngine {
     );
 
     const angle = this.trialPrng ? this.trialPrng() * Math.PI * 2 : Math.random() * Math.PI * 2;
-    const created = createCyberObstacleGroup(selectedType, angle);
+    const created = createCyberObstacleGroup(selectedType, angle, z, biome?.id);
 
-    // Support sequential flow and slalom corridor obstacle chains (spiral corkscrew, chicane, compression tunnel)
+    // Support sequential flow and slalom corridor obstacle chains (spiral colonnade, chicane, arch tunnel, etc.)
     if (created.chainedItems && created.chainedItems.length > 0) {
       let maxZ = z;
       for (const item of created.chainedItems) {
@@ -1024,7 +1034,8 @@ export class VoxotronCylinderEngine {
           movement: item.result.movement,
         });
       }
-      this.lastSpawnedObstacleZ = Math.max(this.lastSpawnedObstacleZ, maxZ);
+      // Generous exit clearance buffer (+65m) so the player exits tunnels/chicanes cleanly without an obstacle right in front of them
+      this.lastSpawnedObstacleZ = Math.max(this.lastSpawnedObstacleZ, maxZ + 65);
       return;
     }
 
@@ -1051,6 +1062,11 @@ export class VoxotronCylinderEngine {
       grazed: false,
       movement: created.movement,
     });
+
+    // Clearance buffer for wide/deep hazard zones (lava lakes, ice slicks)
+    if (created.depthZ && created.depthZ > 12) {
+      this.lastSpawnedObstacleZ = Math.max(this.lastSpawnedObstacleZ, z + created.depthZ * 0.5 + 20);
+    }
   }
 
   public setSteer(steer: number) {
@@ -1149,9 +1165,11 @@ export class VoxotronCylinderEngine {
     this.camAngle = Math.PI / 2;
     this.currentBankAngle = 0;
     this.bikeAngularVelocity = 0;
-    this.speedKmh = 220;
-    this.maxSpeedReached = 220;
-    this.currentSpeedClass = 'CRUISE';
+    const isBossTrial = this.mode === 'speedrun_5' || this.trialConfig?.modeKey === 'speedrun_5';
+    const initialSpeed = isBossTrial ? 380 : (this.mode === 'sprint_30s' ? 340 : 220);
+    this.speedKmh = initialSpeed;
+    this.maxSpeedReached = initialSpeed;
+    this.currentSpeedClass = isBossTrial ? 'FLOW' : (this.mode === 'sprint_30s' ? 'FLOW' : 'CRUISE');
     this.smoothnessFactor = 98;
     this.gameTimeMs = 0;
     this.sprintRemainingMs = 30000;
@@ -1346,10 +1364,14 @@ export class VoxotronCylinderEngine {
     if (this.cryoFreezeTimer > 0) {
       this.cryoFreezeTimer = Math.max(0, this.cryoFreezeTimer - delta);
     }
+    if (this.onIceSlickTimer > 0) {
+      this.onIceSlickTimer = Math.max(0, this.onIceSlickTimer - delta);
+    }
 
-    // Calibrated Steering: 80% of original baseline (responsive, fast, and agile)
+    // Calibrated Steering: responsive and agile with sprint bonus for ultra-high velocity
     const cryoMultiplier = this.cryoFreezeTimer > 0 ? 0.4 : 1.0;
-    const baseAgility = (2.72 + this.vehicleDef.stats.handling * 0.48) * cryoMultiplier;
+    const sprintAgilityBonus = this.mode === 'sprint_30s' ? 1.25 : 1.0;
+    const baseAgility = (2.72 + this.vehicleDef.stats.handling * 0.48) * cryoMultiplier * sprintAgilityBonus;
     const agility = baseAgility * this.steeringSensitivity;
     const targetAngularVel = this.inputSteer * agility;
 
@@ -1360,7 +1382,9 @@ export class VoxotronCylinderEngine {
       this.smoothnessFactor = Math.min(100, this.smoothnessFactor + 10 * delta);
     }
 
-    this.bikeAngularVelocity = THREE.MathUtils.lerp(this.bikeAngularVelocity, targetAngularVel, 18 * delta);
+    // Ice slick provides excessive sliding (low traction lerp rate = momentum drift!)
+    const steerLerpSpeed = this.onIceSlickTimer > 0 ? 3.8 : 18;
+    this.bikeAngularVelocity = THREE.MathUtils.lerp(this.bikeAngularVelocity, targetAngularVel, steerLerpSpeed * delta);
     this.bikeAngle += this.bikeAngularVelocity * delta;
 
     // Singularity Gravitational Pull
@@ -1386,31 +1410,48 @@ export class VoxotronCylinderEngine {
     if (this.bikeAngle < 0) this.bikeAngle += Math.PI * 2;
     if (this.bikeAngle >= Math.PI * 2) this.bikeAngle -= Math.PI * 2;
 
-    // Continuous Acceleration (Survival-oriented pacing vs high-speed sprint)
+    // Continuous Acceleration: speed cap at 3000 km/h with temporary boost bursts
     const isSurvival = this.mode === 'survival' || this.mode === 'daily';
+    const isSprint = this.mode === 'sprint_30s';
     const baseAccel = isSurvival
-      ? 5.0 + this.vehicleDef.stats.acceleration * 1.4 // Calibrated for strategic survival
-      : 14.0 + this.vehicleDef.stats.acceleration * 3.2; // Energetic for 30s sprint
-    const boostMultiplier = this.inputBoost ? (isSurvival ? 1.75 : 2.6) : 1.0;
+      ? 8.0 + this.vehicleDef.stats.acceleration * 2.2 // Calibrated for strategic survival progression
+      : isSprint
+      ? 46.0 + this.vehicleDef.stats.acceleration * 11.5 // Explosive hyper-acceleration: reaches high velocity rapidly!
+      : 18.0 + this.vehicleDef.stats.acceleration * 4.5; // Speedrun trials
+    const boostMultiplier = this.inputBoost 
+      ? (isSurvival ? 1.75 : isSprint ? 4.5 : 2.6) 
+      : 1.0;
     const smoothnessBonus = this.smoothnessFactor / 100;
 
-    this.speedKmh += baseAccel * boostMultiplier * smoothnessBonus * delta;
+    const MAX_CRUISE_SPEED_KMH = 3000;
+    const BLEED_OFF_RATE_KMH_SEC = 240; // Decays temporary boost bursts smoothly back down to 3000 km/h
+
+    if (this.speedKmh < MAX_CRUISE_SPEED_KMH) {
+      this.speedKmh += baseAccel * boostMultiplier * smoothnessBonus * delta;
+      if (this.speedKmh > MAX_CRUISE_SPEED_KMH) {
+        this.speedKmh = MAX_CRUISE_SPEED_KMH;
+      }
+    } else if (this.speedKmh > MAX_CRUISE_SPEED_KMH) {
+      // Speed threshold broken via boost pads or hyper battery!
+      // Give the player a thrilling burst, then smoothly bleed back down to 3000 km/h
+      this.speedKmh = Math.max(MAX_CRUISE_SPEED_KMH, this.speedKmh - BLEED_OFF_RATE_KMH_SEC * delta);
+    }
 
     if (this.speedKmh > this.maxSpeedReached) {
       this.maxSpeedReached = Math.round(this.speedKmh);
     }
 
-    // Refined 6-tier Speed Class Hierarchy
+    // Refined 6-tier Speed Class Hierarchy mapped across the 0-3000+ km/h range
     let newClass: SpeedClass = 'CRUISE';
-    if (this.speedKmh >= 1060) {
+    if (this.speedKmh >= 2600) {
       newClass = 'OVERDRIVE';
-    } else if (this.speedKmh >= 860) {
+    } else if (this.speedKmh >= 2000) {
       newClass = 'WARP';
-    } else if (this.speedKmh >= 660) {
+    } else if (this.speedKmh >= 1400) {
       newClass = 'HYPER';
-    } else if (this.speedKmh >= 460) {
+    } else if (this.speedKmh >= 850) {
       newClass = 'APEX';
-    } else if (this.speedKmh >= 280) {
+    } else if (this.speedKmh >= 400) {
       newClass = 'FLOW';
     }
 
@@ -1722,7 +1763,9 @@ export class VoxotronCylinderEngine {
   private handleGrazeEvent(obs: ObstacleData) {
     this.grazeStreak++;
     this.totalGrazes++;
-    const speedBonus = 50 + this.vehicleDef.stats.grazeRadius * 7;
+    const speedBonus = this.mode === 'sprint_30s'
+      ? (110 + this.vehicleDef.stats.grazeRadius * 16)
+      : (50 + this.vehicleDef.stats.grazeRadius * 7);
     this.speedKmh += speedBonus;
     this.coinsCollected += 5 * Math.min(this.grazeStreak, 10);
     this.scrapCollected += 1;
@@ -1791,6 +1834,10 @@ export class VoxotronCylinderEngine {
             innerRotor.rotateZ(rotDelta);
           } else {
             obs.mesh.rotateZ(rotDelta);
+          }
+          const counterRotor = obs.mesh.getObjectByName('counter_rotor');
+          if (counterRotor) {
+            counterRotor.rotateZ(-rotDelta * 1.15);
           }
           obs.movement.currentAngle = normalizeAngle((obs.movement.currentAngle ?? obs.angle) + rotDelta);
           if (obs.blockedSectors) {
@@ -1869,7 +1916,7 @@ export class VoxotronCylinderEngine {
       }
 
       // At this point, the bike is physically traversing through the obstacle's Z-slice
-      // Boost Pad pickup
+      // Boost Pad pickup - temporary burst that allows breaking through the 3000 km/h speed threshold
       if (obs.type === 'boost_pad') {
         const isOver = obs.blockedSectors?.some((sec: any) => {
           const center = sec.centerAngle ?? (sec.minAngle + sec.maxAngle) * 0.5;
@@ -1878,10 +1925,12 @@ export class VoxotronCylinderEngine {
         });
         if (isOver && !obs.grazed) {
           obs.grazed = true;
-          this.speedKmh += 160;
-          this.cameraShakeIntensity = 0.3;
+          // Temporary surge that breaks 3000 km/h cap (up to 4200 km/h peak)
+          const boostAdd = this.mode === 'sprint_30s' ? 450 : 350;
+          this.speedKmh = Math.min(4200, this.speedKmh + boostAdd);
+          this.cameraShakeIntensity = 0.45;
           sound.playBoost();
-          this.triggerPickupFeedback('boost', 'ГИПЕР-УСКОРЕНИЕ!', '+160 КМ/Ч', '#ff007f');
+          this.triggerPickupFeedback('boost', 'ТУРБО-РЫВОК!', `+${boostAdd} КМ/Ч`, '#ff007f');
           this.spawnPickupShockwave(obs.z, obs.angle, 0xff007f);
           continue;
         }
@@ -1919,13 +1968,33 @@ export class VoxotronCylinderEngine {
           obs.collected = true;
           this.coinsCollected += 100;
           this.scrapCollected += 5;
-          this.speedKmh += 140;
+          const batteryBonus = this.mode === 'sprint_30s' ? 220 : 140;
+          this.speedKmh += batteryBonus;
           this.cameraShakeIntensity = 0.35;
           sound.playPickupBig();
           this.triggerPickupFeedback('battery', '+100 МОНЕТ! +5 СКРАПА!', 'ГИПЕР-АККУМУЛЯТОР АКТИВИРОВАН', '#fcee0a');
           this.spawnPickupShockwave(obs.z, obs.angle, 0xfcee0a);
           this.scene.remove(obs.mesh);
           this.disposeGroupDeep(obs.mesh);
+          continue;
+        }
+      }
+
+      // Dynamic Trap: Cryo Ice Slick Patch (Excessive sliding & lateral drift)
+      if (obs.type === 'ice_slick_patch') {
+        const isOver = obs.blockedSectors?.some((sec: any) => {
+          const center = sec.centerAngle ?? (sec.minAngle + sec.maxAngle) * 0.5;
+          const halfArc = sec.halfArc ?? 0.55;
+          return shortestAngleDist(this.bikeAngle, center) <= halfArc;
+        });
+        if (isOver) {
+          const wasOnIce = this.onIceSlickTimer > 0;
+          this.onIceSlickTimer = 0.65;
+          if (!wasOnIce) {
+            sound.playIceSlide();
+            this.cameraShakeIntensity = 0.22;
+            this.triggerPickupFeedback('ice', 'ЛЕДЯНОЙ ЗАНОС!', 'ИЗБЫТОЧНОЕ СКОЛЬЖЕНИЕ', '#00f0ff');
+          }
           continue;
         }
       }
@@ -1973,7 +2042,7 @@ export class VoxotronCylinderEngine {
     this.camAngle += angleDiff * Math.min(1.0, 9.0 * delta);
 
     // Camera position strictly synchronized with smoothed camAngle
-    const targetCamPos = cosmicTube.getSurfacePoint(this.bikeZ - 8.2, this.camAngle, 3.1);
+    const targetCamPos = cosmicTube.getSurfacePoint(this.bikeZ - 8.6, this.camAngle, 3.25);
     this.camera.position.copy(targetCamPos);
 
     // Radial outward normal MUST be copied to camera.up BEFORE camera.lookAt!
@@ -1981,27 +2050,54 @@ export class VoxotronCylinderEngine {
     this.camera.up.copy(outwardNormal);
 
     // Look ahead down the winding highway
-    const lookTarget = cosmicTube.getSurfacePoint(this.bikeZ + 32.0, this.camAngle, 1.1);
+    const lookTarget = cosmicTube.getSurfacePoint(this.bikeZ + 36.0, this.camAngle, 1.1);
     this.camera.lookAt(lookTarget);
 
-    // Camera shake on graze, boost, and high-speed turbulence
-    if (this.cameraShakeIntensity > 0.001) {
-      const shakeY = (Math.random() - 0.5) * this.cameraShakeIntensity;
-      this.camera.position.addScaledVector(this.camera.up, shakeY);
-      this.cameraShakeIntensity = THREE.MathUtils.lerp(this.cameraShakeIntensity, 0, 8 * delta);
+    // Aerodynamic cockpit rumble: triggers ONLY at very high speeds (>720 km/h)
+    // Uses smooth organic harmonic oscillation instead of harsh random jitter to preserve razor-sharp visuals
+    let speedShake = 0;
+    if (this.speedKmh > 720) {
+      const speedNorm = Math.min(1.0, (this.speedKmh - 720) / 480); // 0 at 720 km/h, 1 at 1200 km/h
+      speedShake = speedNorm * speedNorm * 0.045; // Progressive quadratic ramp
     }
 
-    // Dynamic FOV for warp sensation
-    const targetFov =
+    const time = this.gameTimeMs * 0.016;
+    const harmonicY = Math.sin(time * 2.4) * Math.cos(time * 1.6);
+    const harmonicX = Math.cos(time * 2.0) * Math.sin(time * 1.4);
+
+    const smoothSpeedY = harmonicY * speedShake;
+    const smoothSpeedX = harmonicX * speedShake * 0.65;
+
+    // Smooth collision/pickup impulse shake
+    const impulseY = Math.sin(this.gameTimeMs * 0.035) * this.cameraShakeIntensity * 0.7;
+    const impulseX = Math.cos(this.gameTimeMs * 0.028) * this.cameraShakeIntensity * 0.5;
+
+    const totalShakeY = smoothSpeedY + impulseY;
+    const totalShakeX = smoothSpeedX + impulseX;
+
+    if (Math.abs(totalShakeY) > 0.0001 || Math.abs(totalShakeX) > 0.0001) {
+      this.camera.position.addScaledVector(this.camera.up, totalShakeY);
+      const camRight = new THREE.Vector3().crossVectors(this.camera.getWorldDirection(new THREE.Vector3()), this.camera.up).normalize();
+      this.camera.position.addScaledVector(camRight, totalShakeX);
+    }
+
+    if (this.cameraShakeIntensity > 0) {
+      this.cameraShakeIntensity = THREE.MathUtils.lerp(this.cameraShakeIntensity, 0, 10 * delta);
+    }
+
+    // Dynamic Voxotron-style FOV scaling with speed and boost
+    const baseTargetFov =
       this.currentSpeedClass === 'OVERDRIVE'
-        ? 88
+        ? 104
         : this.currentSpeedClass === 'WARP'
-        ? 82
+        ? 95
         : this.currentSpeedClass === 'HYPER'
-        ? 76
+        ? 87
         : this.currentSpeedClass === 'APEX'
-        ? 71
-        : 65;
+        ? 80
+        : 74;
+    const boostFovBonus = this.inputBoost ? 5 : 0;
+    const targetFov = baseTargetFov + boostFovBonus;
     this.camera.fov = THREE.MathUtils.lerp(this.camera.fov, targetFov, 6 * delta);
     this.camera.updateProjectionMatrix();
   }
@@ -2068,7 +2164,10 @@ export class VoxotronCylinderEngine {
     // Determine precise death reason for clear player feedback
     let crashReason = customReason;
     if (!crashReason) {
-      if (hitObstacle.type === 'quantum_mine') {
+      if (hitObstacle.type === 'lava_puddle_trap') {
+        crashReason = 'ПОГРУЖЕНИЕ В КИПЯЩУЮ ЛАВУ! НЕ НАЕЗЖАТЬ НА ЛАВОВЫЕ ЛУЖИ!';
+        sound.playLavaSizzle();
+      } else if (hitObstacle.type === 'quantum_mine') {
         crashReason = 'ПОДРЫВ НА КЛАСТЕРНОЙ МИНЕ ПУСТОТЫ';
       } else if (hitObstacle.type === 'laser_quad_gate') {
         crashReason = 'РАССЕЧЕНИЕ ОРБИТАЛЬНЫМ ЛАЗЕРОМ БОССА';
@@ -2079,8 +2178,11 @@ export class VoxotronCylinderEngine {
       }
     }
 
-    // Spectacular neon voxel explosion shower
-    const colors = [this.vehicleDef.baseColor, this.vehicleDef.glowColor, '#ff0055', '#00f0ff', '#ffffff'];
+    // Spectacular neon voxel explosion shower (with volcanic magma embers if lava)
+    const isLava = hitObstacle.type === 'lava_puddle_trap';
+    const colors = isLava
+      ? ['#ff3300', '#ff6600', '#ffaa00', '#ff0033', '#fff0aa']
+      : [this.vehicleDef.baseColor, this.vehicleDef.glowColor, '#ff0055', '#00f0ff', '#ffffff'];
     for (let i = 0; i < 90; i++) {
       const size = 0.25 + Math.random() * 0.35;
       const color = colors[Math.floor(Math.random() * colors.length)];

@@ -309,6 +309,70 @@ class VoxotronSoundEngine {
   }
 
   /**
+   * Ice Slide: Chilled resonant whoosh when drifting on ice slick
+   */
+  public playIceSlide() {
+    if (this.isMuted) return;
+    this.initContext();
+    if (!this.ctx || !this.sfxGain) return;
+    const now = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const filter = this.ctx.createBiquadFilter();
+    const gain = this.ctx.createGain();
+
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(420, now);
+    osc.frequency.exponentialRampToValueAtTime(740, now + 0.12);
+    osc.frequency.exponentialRampToValueAtTime(280, now + 0.32);
+
+    filter.type = 'bandpass';
+    filter.frequency.setValueAtTime(1100, now);
+    filter.Q.setValueAtTime(2.5, now);
+
+    gain.gain.setValueAtTime(0.01, now);
+    gain.gain.linearRampToValueAtTime(0.12, now + 0.04);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+
+    osc.connect(filter);
+    filter.connect(gain);
+    gain.connect(this.sfxGain);
+
+    osc.start(now);
+    osc.stop(now + 0.36);
+  }
+
+  /**
+   * Lava Sizzle: Sizzling thermal steam hiss and deep bubbling heat
+   */
+  public playLavaSizzle() {
+    if (this.isMuted) return;
+    this.initContext();
+    if (!this.ctx || !this.sfxGain) return;
+    const now = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    const filter = this.ctx.createBiquadFilter();
+
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(120, now);
+    osc.frequency.linearRampToValueAtTime(65, now + 0.28);
+
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(500, now);
+
+    gain.gain.setValueAtTime(0.01, now);
+    gain.gain.linearRampToValueAtTime(0.22, now + 0.04);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+
+    osc.connect(filter);
+    filter.connect(gain);
+    gain.connect(this.sfxGain);
+
+    osc.start(now);
+    osc.stop(now + 0.32);
+  }
+
+  /**
    * Speed tier transition: celestial harmonic chord progression
    */
   public playSpeedClassShift(newClass: SpeedClass) {

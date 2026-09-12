@@ -699,6 +699,10 @@ export function generateSkinTexture(skin: SkinDef): THREE.CanvasTexture {
   const texture = new THREE.CanvasTexture(canvas);
   texture.wrapS = THREE.RepeatWrapping;
   texture.wrapT = THREE.RepeatWrapping;
+  texture.generateMipmaps = true;
+  texture.minFilter = THREE.LinearMipmapLinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  texture.anisotropy = 8;
   textureCache.set(skin.id, texture);
   return texture;
 }

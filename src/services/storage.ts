@@ -489,7 +489,7 @@ export function saveLocalProfile(profile: UserProfile): void {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(profile));
   } catch (e) {
-    console.error('Failed to save profile to localStorage:', e);
+    console.warn('Failed to save profile to localStorage:', e);
   }
 }
 
@@ -503,6 +503,9 @@ export async function saveProfileToCloud(profile: UserProfile): Promise<{ succes
         profileData: profile,
       }),
     });
+    if (!response.ok) {
+      return { success: false, error: `Сбой сервера: ${response.status}` };
+    }
     const data = await response.json();
     return { success: data.success, error: data.error };
   } catch (err: any) {
@@ -513,6 +516,9 @@ export async function saveProfileToCloud(profile: UserProfile): Promise<{ succes
 export async function loadProfileFromCloud(syncKey: string): Promise<{ success: boolean; profile?: UserProfile; error?: string }> {
   try {
     const response = await fetch(getApiUrl(`/api/cloud-save/${encodeURIComponent(syncKey)}`));
+    if (!response.ok) {
+      return { success: false, error: `Сбой сервера: ${response.status}` };
+    }
     const data = await response.json();
     if (data.success && (data.profile || data.profileData)) {
       return { success: true, profile: data.profile || data.profileData };
@@ -527,10 +533,12 @@ export async function fetchLeaderboard(mode: string): Promise<LeaderboardEntry[]
   const cacheKey = `voxotron_lb_${mode}`;
   try {
     const res = await fetch(getApiUrl(`/api/leaderboard/${encodeURIComponent(mode)}`));
-    const data = await res.json();
-    if (Array.isArray(data.records) && data.records.length > 0) {
-      localStorage.setItem(cacheKey, JSON.stringify(data.records));
-      return data.records;
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data.records) && data.records.length > 0) {
+        localStorage.setItem(cacheKey, JSON.stringify(data.records));
+        return data.records;
+      }
     }
   } catch {
     // Network fallback
@@ -564,7 +572,10 @@ export async function submitLeaderboardScore(scoreData: {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(scoreData),
     });
-    const data = await res.json();
+    let data: any = { success: true };
+    if (res.ok) {
+      data = await res.json();
+    }
 
     // Cache user's score locally as well
     try {
@@ -598,7 +609,10 @@ export async function submitLeaderboardScore(scoreData: {
 export async function fetchDailyInfo() {
   try {
     const res = await fetch(getApiUrl('/api/daily-challenge'));
-    return await res.json();
+    if (res.ok) {
+      return await res.json();
+    }
+    return null;
   } catch {
     return null;
   }

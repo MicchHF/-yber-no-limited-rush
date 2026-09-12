@@ -514,12 +514,12 @@ export class CyberpunkCityEnvironment {
         this.props.push({ mesh: arch, baseZ: archZ, type: 'arch' });
       }
 
-      // 2. Jagged Volcanic Basalt Spires (8 surrounding the tube)
-      const spireCount = 8;
+      // 2. Jagged Volcanic Basalt Spires (Surrounding the distant horizon)
+      const spireCount = 5;
       for (let i = 0; i < spireCount; i++) {
         const bZ = startZ + (i / spireCount) * length + (Math.random() - 0.5) * 15;
         const angle = Math.random() * Math.PI * 2;
-        const distance = 46 + Math.random() * 60;
+        const distance = 78 + Math.random() * 65;
 
         const spire = this.createVolcanicBasaltSpire();
         const center = cosmicTube.getCenter(bZ);
@@ -537,11 +537,11 @@ export class CyberpunkCityEnvironment {
         this.props.push({ mesh: spire, baseZ: bZ, type: 'volcano' });
       }
 
-      // 3. Erupting Magma Geysers (2 per segment)
+      // 3. Erupting Magma Geysers (Set back to avoid distraction)
       for (let i = 0; i < 2; i++) {
         const gZ = startZ + (i + 0.5) * (length / 2);
         const angle = (i % 2 === 0 ? 0.4 : -0.4) * Math.PI;
-        const dist = 36 + Math.random() * 12;
+        const dist = 52 + Math.random() * 20;
 
         const geyser = this.createMagmaGeyser();
         const center = cosmicTube.getCenter(gZ);
@@ -567,12 +567,12 @@ export class CyberpunkCityEnvironment {
         this.props.push({ mesh: arch, baseZ: archZ, type: 'arch' });
       }
 
-      // 2. Colossal Crystalline Glaciers & Icebergs (6 surrounding the tube)
-      const iceCount = 6;
+      // 2. Colossal Crystalline Glaciers & Icebergs (Set further back on the horizon)
+      const iceCount = 4;
       for (let i = 0; i < iceCount; i++) {
         const bZ = startZ + (i / iceCount) * length + (Math.random() - 0.5) * 15;
         const angle = Math.random() * Math.PI * 2;
-        const distance = 48 + Math.random() * 65;
+        const distance = 80 + Math.random() * 65;
 
         const glacier = this.createGlacialIceberg();
         const center = cosmicTube.getCenter(bZ);
@@ -590,11 +590,11 @@ export class CyberpunkCityEnvironment {
         this.props.push({ mesh: glacier, baseZ: bZ, type: 'iceberg' });
       }
 
-      // 3. Sharp Ice Needle Clusters (3 per segment)
-      for (let i = 0; i < 3; i++) {
-        const nZ = startZ + (i / 3) * length;
+      // 3. Sharp Ice Needle Clusters (Pushed outward)
+      for (let i = 0; i < 2; i++) {
+        const nZ = startZ + (i + 0.5) * (length / 2);
         const angle = (i * 0.7 + 0.3) * Math.PI;
-        const dist = 32 + Math.random() * 10;
+        const dist = 50 + Math.random() * 20;
 
         const needles = this.createIceNeedleCluster();
         const center = cosmicTube.getCenter(nZ);
@@ -620,12 +620,12 @@ export class CyberpunkCityEnvironment {
         this.props.push({ mesh: arch, baseZ: archZ, type: 'arch' });
       }
 
-      // 2. Rotating Translucent Quantum Hypercubes (5 per segment)
-      const cubeCount = 5;
+      // 2. Rotating Translucent Quantum Hypercubes (Pushed outward for clarity)
+      const cubeCount = 4;
       for (let i = 0; i < cubeCount; i++) {
         const bZ = startZ + (i / cubeCount) * length + (Math.random() - 0.5) * 12;
         const angle = Math.random() * Math.PI * 2;
-        const distance = 42 + Math.random() * 55;
+        const distance = 75 + Math.random() * 60;
 
         const cube = this.createQuantumHypercube();
         const center = cosmicTube.getCenter(bZ);
@@ -643,12 +643,12 @@ export class CyberpunkCityEnvironment {
         this.props.push({ mesh: cube, baseZ: bZ, type: 'quantum' });
       }
 
-      // 3. Alien Runic Obelisks (5 per segment)
-      const obeliskCount = 5;
+      // 3. Alien Runic Obelisks (Set back)
+      const obeliskCount = 4;
       for (let i = 0; i < obeliskCount; i++) {
         const oZ = startZ + (i / obeliskCount) * length + (Math.random() - 0.5) * 10;
         const angle = (i * 0.45 + 0.2) * Math.PI * 2;
-        const distance = 50 + Math.random() * 55;
+        const distance = 80 + Math.random() * 60;
 
         const obelisk = this.createAlienObelisk();
         const center = cosmicTube.getCenter(oZ);
@@ -683,11 +683,11 @@ export class CyberpunkCityEnvironment {
       }
 
       // 3. Colossal Void Citadels & Dark Matter Pillars framing the arena
-      const spireCount = 6;
+      const spireCount = 4;
       for (let i = 0; i < spireCount; i++) {
         const bZ = startZ + (i / spireCount) * length + (Math.random() - 0.5) * 15;
         const angle = Math.random() * Math.PI * 2;
-        const distance = 48 + Math.random() * 55;
+        const distance = 80 + Math.random() * 55;
 
         const spire = this.createVolcanicBasaltSpire();
         const center = cosmicTube.getCenter(bZ);
@@ -713,12 +713,12 @@ export class CyberpunkCityEnvironment {
         this.props.push({ mesh: arch, baseZ: archZ, type: 'arch' });
       }
 
-      // 2. Megacity Skyscraper Cluster surrounding the tube (8 per segment)
-      const buildingCount = 8;
+      // 2. Megacity Skyscraper Cluster pushed further back onto the horizon
+      const buildingCount = 5;
       for (let i = 0; i < buildingCount; i++) {
         const bZ = startZ + (i / buildingCount) * length + (Math.random() - 0.5) * 15;
         const angle = Math.random() * Math.PI * 2;
-        const distance = 50 + Math.random() * 65;
+        const distance = 80 + Math.random() * 75;
 
         const building = this.createModernSkyscraper();
         const center = cosmicTube.getCenter(bZ);
@@ -736,11 +736,11 @@ export class CyberpunkCityEnvironment {
         this.props.push({ mesh: building, baseZ: bZ, type: 'building' });
       }
 
-      // 3. Floating Holographic Cyber Speedway Billboards
+      // 3. Floating Holographic Cyber Speedway Billboards (Set back)
       for (let i = 0; i < 2; i++) {
         const billZ = startZ + (i + 0.5) * (length / 2);
         const angle = (i % 2 === 0 ? 0.35 : -0.35) * Math.PI;
-        const dist = 26 + Math.random() * 8;
+        const dist = 46 + Math.random() * 16;
 
         const billboard = this.createHoloBillboard();
         const center = cosmicTube.getCenter(billZ);
@@ -758,8 +758,8 @@ export class CyberpunkCityEnvironment {
         this.props.push({ mesh: billboard, baseZ: billZ, type: 'billboard' });
       }
 
-      // 4. Traffic Speeder
-      if (this.trafficCars.length < 50) {
+      // 4. Distant Ambient Hover Traffic (Reduced density and pushed to high orbit)
+      if (this.trafficCars.length < 24) {
         this.spawnTrafficCar(startZ + Math.random() * length);
       }
     }
@@ -1171,7 +1171,7 @@ export class CyberpunkCityEnvironment {
     this.group.add(drone);
 
     const speed = (Math.random() > 0.5 ? 1 : -1) * (40 + Math.random() * 50);
-    const radius = 28 + Math.random() * 32;
+    const radius = 55 + Math.random() * 45;
     const angle = Math.random() * Math.PI * 2;
 
     this.trafficCars.push({

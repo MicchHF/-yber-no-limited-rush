@@ -1,8 +1,10 @@
+import * as THREE from 'three';
 import { CyberObstacleType, BiomeInfo } from '../types';
 
 export interface BiomeConfig extends BiomeInfo {
   startDistance: number;
   endDistance: number;
+  tubeRadius: number; // Fixed base cylinder radius for this biome
   skyColor: number;
   fogColor: number;
   fogDensity: number;
@@ -29,6 +31,7 @@ export const BIOMES: BiomeConfig[] = [
     accentColor: '#00f0ff',
     startDistance: 0,
     endDistance: 2500,
+    tubeRadius: 14.0, // Standard speedway highway
     skyColor: 0x040612,
     fogColor: 0x040718,
     fogDensity: 0.0012,
@@ -43,14 +46,23 @@ export const BIOMES: BiomeConfig[] = [
     railColor2: 0xff007f,
     ringColor: 0x00f0ff,
     obstaclePool: [
-      { type: 'spoke_wheel_gate', weight: 18 },
-      { type: 'half_disc_barrier', weight: 18 },
-      { type: 'slalom_chicane', weight: 14 },
-      { type: 'spiral_corkscrew_tunnel', weight: 12 },
-      { type: 'compression_speed_tunnel', weight: 12 },
-      { type: 'spiral_voxel_fan', weight: 12 },
-      { type: 'laser_quad_gate', weight: 10 },
-      { type: 'titan_monolith', weight: 6 },
+      { type: 'vox_pinwheel_cross', weight: 14 },
+      { type: 'vox_piston_press', weight: 13 },
+      { type: 'vox_stepped_cascade', weight: 13 },
+      { type: 'vox_spiral_pillar_tunnel', weight: 14 },
+      { type: 'vox_helix_corkscrew', weight: 14 },
+      { type: 'vox_aperture_iris', weight: 13 },
+      { type: 'vox_dual_counter_rotator', weight: 13 },
+      { type: 'colossal_rotating_spokes', weight: 13 },
+      { type: 'colossal_voxel_fan', weight: 12 },
+      { type: 'vox_slalom_pair', weight: 12 },
+      { type: 'vox_slit_cascade', weight: 12 },
+      { type: 'vox_archway_tunnel', weight: 11 },
+      { type: 'spoke_wheel_gate', weight: 10 },
+      { type: 'half_disc_barrier', weight: 9 },
+      { type: 'slalom_chicane', weight: 9 },
+      { type: 'titan_monolith', weight: 8 },
+      { type: 'laser_quad_gate', weight: 7 },
       { type: 'boost_pad', weight: 6 },
       { type: 'energy_prism', weight: 6 },
     ],
@@ -64,6 +76,7 @@ export const BIOMES: BiomeConfig[] = [
     accentColor: '#ff6600',
     startDistance: 2500,
     endDistance: 5000,
+    tubeRadius: 10.0, // Narrow, claustrophobic high-intensity magma chasm
     skyColor: 0x220502,
     fogColor: 0x280602,
     fogDensity: 0.0016,
@@ -78,13 +91,24 @@ export const BIOMES: BiomeConfig[] = [
     railColor2: 0xffcc00,
     ringColor: 0xff2200,
     obstaclePool: [
-      { type: 'magma_grinder', weight: 18 },
-      { type: 'slalom_chicane', weight: 14 },
-      { type: 'compression_speed_tunnel', weight: 14 },
-      { type: 'plasma_firewall', weight: 14 },
-      { type: 'volcanic_arch_eruption', weight: 14 },
-      { type: 'inferno_pillar', weight: 12 },
-      { type: 'spiral_corkscrew_tunnel', weight: 10 },
+      { type: 'vox_piston_press', weight: 14 },
+      { type: 'vox_pinwheel_cross', weight: 13 },
+      { type: 'vox_stepped_cascade', weight: 12 },
+      { type: 'lava_puddle_trap', weight: 13 },
+      { type: 'vox_helix_corkscrew', weight: 13 },
+      { type: 'vox_aperture_iris', weight: 13 },
+      { type: 'vox_dual_counter_rotator', weight: 13 },
+      { type: 'colossal_rotating_spokes', weight: 13 },
+      { type: 'vox_slalom_pair', weight: 12 },
+      { type: 'vox_slit_cascade', weight: 12 },
+      { type: 'vox_spiral_pillar_tunnel', weight: 12 },
+      { type: 'colossal_voxel_fan', weight: 11 },
+      { type: 'magma_grinder', weight: 11 },
+      { type: 'slalom_chicane', weight: 10 },
+      { type: 'plasma_firewall', weight: 10 },
+      { type: 'volcanic_arch_eruption', weight: 10 },
+      { type: 'inferno_pillar', weight: 9 },
+      { type: 'vox_archway_tunnel', weight: 9 },
       { type: 'half_disc_barrier', weight: 8 },
       { type: 'boost_pad', weight: 6 },
       { type: 'energy_prism', weight: 6 },
@@ -99,6 +123,7 @@ export const BIOMES: BiomeConfig[] = [
     accentColor: '#67e8f9',
     startDistance: 5000,
     endDistance: 7500,
+    tubeRadius: 18.0, // Vast, colossal glacial expanse
     skyColor: 0x01081e,
     fogColor: 0x020a1c,
     fogDensity: 0.0011,
@@ -113,14 +138,24 @@ export const BIOMES: BiomeConfig[] = [
     railColor2: 0xff3b00,
     ringColor: 0x00f0ff,
     obstaclePool: [
-      { type: 'cryo_pendulum', weight: 16 },
-      { type: 'spiral_corkscrew_tunnel', weight: 16 },
-      { type: 'frost_shard_gate', weight: 14 },
-      { type: 'cryo_blizzard_vortex', weight: 14 },
-      { type: 'slalom_chicane', weight: 14 },
-      { type: 'glacier_spikes', weight: 12 },
-      { type: 'compression_speed_tunnel', weight: 10 },
-      { type: 'spiral_voxel_fan', weight: 8 },
+      { type: 'vox_stepped_cascade', weight: 14 },
+      { type: 'vox_pinwheel_cross', weight: 13 },
+      { type: 'vox_piston_press', weight: 12 },
+      { type: 'ice_slick_patch', weight: 14 },
+      { type: 'vox_helix_corkscrew', weight: 14 },
+      { type: 'vox_aperture_iris', weight: 13 },
+      { type: 'vox_dual_counter_rotator', weight: 13 },
+      { type: 'vox_archway_tunnel', weight: 12 },
+      { type: 'vox_slalom_pair', weight: 12 },
+      { type: 'vox_slit_cascade', weight: 12 },
+      { type: 'colossal_voxel_fan', weight: 11 },
+      { type: 'vox_spiral_pillar_tunnel', weight: 11 },
+      { type: 'cryo_pendulum', weight: 11 },
+      { type: 'colossal_rotating_spokes', weight: 11 },
+      { type: 'frost_shard_gate', weight: 10 },
+      { type: 'cryo_blizzard_vortex', weight: 10 },
+      { type: 'slalom_chicane', weight: 9 },
+      { type: 'glacier_spikes', weight: 9 },
       { type: 'boost_pad', weight: 5 },
       { type: 'energy_prism', weight: 5 },
     ],
@@ -134,6 +169,7 @@ export const BIOMES: BiomeConfig[] = [
     accentColor: '#39ff14',
     startDistance: 7500,
     endDistance: 10000,
+    tubeRadius: 12.0, // Agile, warped cyber tunnel
     skyColor: 0x100020,
     fogColor: 0x140124,
     fogDensity: 0.0016,
@@ -148,14 +184,23 @@ export const BIOMES: BiomeConfig[] = [
     railColor2: 0xf43f5e,
     ringColor: 0x39ff14,
     obstaclePool: [
-      { type: 'quantum_rotator', weight: 16 },
-      { type: 'spiral_corkscrew_tunnel', weight: 16 },
-      { type: 'void_singularity_rift', weight: 14 },
-      { type: 'compression_speed_tunnel', weight: 14 },
-      { type: 'slalom_chicane', weight: 14 },
-      { type: 'tachyon_warp_gate', weight: 14 },
-      { type: 'magma_grinder', weight: 8 },
-      { type: 'cryo_pendulum', weight: 8 },
+      { type: 'vox_pinwheel_cross', weight: 14 },
+      { type: 'vox_piston_press', weight: 14 },
+      { type: 'vox_stepped_cascade', weight: 13 },
+      { type: 'vox_helix_corkscrew', weight: 14 },
+      { type: 'vox_aperture_iris', weight: 14 },
+      { type: 'vox_dual_counter_rotator', weight: 14 },
+      { type: 'colossal_rotating_spokes', weight: 13 },
+      { type: 'colossal_voxel_fan', weight: 13 },
+      { type: 'vox_slalom_pair', weight: 12 },
+      { type: 'vox_slit_cascade', weight: 12 },
+      { type: 'vox_spiral_pillar_tunnel', weight: 12 },
+      { type: 'quantum_rotator', weight: 11 },
+      { type: 'void_singularity_rift', weight: 11 },
+      { type: 'vox_archway_tunnel', weight: 10 },
+      { type: 'slalom_chicane', weight: 9 },
+      { type: 'tachyon_warp_gate', weight: 9 },
+      { type: 'magma_grinder', weight: 7 },
       { type: 'laser_quad_gate', weight: 5 },
       { type: 'boost_pad', weight: 4 },
       { type: 'energy_prism', weight: 4 },
@@ -170,6 +215,7 @@ export const BIOMES: BiomeConfig[] = [
     accentColor: '#dc2626',
     startDistance: 10000,
     endDistance: 11200,
+    tubeRadius: 16.0, // Colossal boss combat arena
     skyColor: 0x140420,
     fogColor: 0x160524,
     fogDensity: 0.0008,
@@ -190,6 +236,81 @@ export const BIOMES: BiomeConfig[] = [
 export const CYCLE_LENGTH = 11200;
 export const BOSS_START_DIST = 10000;
 export const BOSS_END_DIST = 11200;
+
+// Width of the smooth tapering / expanding transition corridor between biomes (±90m -> 180m total)
+export const TRANSITION_HALF_WIDTH = 90;
+
+/**
+ * Checks if the distance falls within a smooth biome transition zone (narrowing or widening).
+ * User mandate: At transition points there must only be smooth narrowing/widening without any obstacles!
+ */
+export function isBiomeTransitionZone(distance: number): boolean {
+  const distInLoop = ((distance % CYCLE_LENGTH) + CYCLE_LENGTH) % CYCLE_LENGTH;
+  const boundaries = [0, 2500, 5000, 7500, 10000, CYCLE_LENGTH];
+  for (const b of boundaries) {
+    if (Math.abs(distInLoop - b) <= TRANSITION_HALF_WIDTH + 15) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Returns the exact fixed tube radius for the current biome,
+ * with C1 continuous smoothstep interpolation through the clear transition zones.
+ */
+export function getTubeRadiusAtDistance(distance: number): number {
+  const distInLoop = ((distance % CYCLE_LENGTH) + CYCLE_LENGTH) % CYCLE_LENGTH;
+
+  // 1. Transition Boundary 2500 (Metropolis 14m -> Inferno 10m) - Funnel / Narrowing
+  if (distInLoop >= 2500 - TRANSITION_HALF_WIDTH && distInLoop <= 2500 + TRANSITION_HALF_WIDTH) {
+    const t = (distInLoop - (2500 - TRANSITION_HALF_WIDTH)) / (2 * TRANSITION_HALF_WIDTH);
+    const s = t * t * (3 - 2 * t);
+    return THREE.MathUtils.lerp(14.0, 10.0, s);
+  }
+
+  // 2. Transition Boundary 5000 (Inferno 10m -> Cryo Void 18m) - Grand Expansion / Widening
+  if (distInLoop >= 5000 - TRANSITION_HALF_WIDTH && distInLoop <= 5000 + TRANSITION_HALF_WIDTH) {
+    const t = (distInLoop - (5000 - TRANSITION_HALF_WIDTH)) / (2 * TRANSITION_HALF_WIDTH);
+    const s = t * t * (3 - 2 * t);
+    return THREE.MathUtils.lerp(10.0, 18.0, s);
+  }
+
+  // 3. Transition Boundary 7500 (Cryo Void 18m -> Quantum Horizon 12m) - Funnel / Narrowing
+  if (distInLoop >= 7500 - TRANSITION_HALF_WIDTH && distInLoop <= 7500 + TRANSITION_HALF_WIDTH) {
+    const t = (distInLoop - (7500 - TRANSITION_HALF_WIDTH)) / (2 * TRANSITION_HALF_WIDTH);
+    const s = t * t * (3 - 2 * t);
+    return THREE.MathUtils.lerp(18.0, 12.0, s);
+  }
+
+  // 4. Transition Boundary 10000 (Quantum Horizon 12m -> Boss Arena 16m) - Expansion / Widening
+  if (distInLoop >= 10000 - TRANSITION_HALF_WIDTH && distInLoop <= 10000 + TRANSITION_HALF_WIDTH) {
+    const t = (distInLoop - (10000 - TRANSITION_HALF_WIDTH)) / (2 * TRANSITION_HALF_WIDTH);
+    const s = t * t * (3 - 2 * t);
+    return THREE.MathUtils.lerp(12.0, 16.0, s);
+  }
+
+  // 5. Loop Boundary 11200 / 0 (Boss Arena 16m -> Metropolis 14m)
+  if (distInLoop >= 11200 - TRANSITION_HALF_WIDTH) {
+    const t = (distInLoop - (11200 - TRANSITION_HALF_WIDTH)) / (2 * TRANSITION_HALF_WIDTH);
+    const s = t * t * (3 - 2 * t);
+    return THREE.MathUtils.lerp(16.0, 14.0, s);
+  }
+  if (distInLoop <= TRANSITION_HALF_WIDTH) {
+    const t = (distInLoop + TRANSITION_HALF_WIDTH) / (2 * TRANSITION_HALF_WIDTH);
+    const s = t * t * (3 - 2 * t);
+    return THREE.MathUtils.lerp(16.0, 14.0, s);
+  }
+
+  // Inside steady biome regions: return fixed constant radius
+  for (const b of BIOMES) {
+    if (distInLoop >= b.startDistance && distInLoop < b.endDistance) {
+      return b.tubeRadius;
+    }
+  }
+
+  return 14.0;
+}
 
 export function isBossBiome(distance: number): boolean {
   const distInLoop = ((distance % CYCLE_LENGTH) + CYCLE_LENGTH) % CYCLE_LENGTH;

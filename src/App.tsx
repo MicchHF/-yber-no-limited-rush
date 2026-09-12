@@ -263,9 +263,11 @@ export default function App() {
       maxSpeedKmh: result.maxSpeedKmh,
       grazeCount: result.grazeCount,
     }).then((res) => {
-      if (res.rank) {
+      if (res && res.rank) {
         setGameResult((prev) => (prev ? { ...prev, rank: res.rank } : null));
       }
+    }).catch(() => {
+      // Safe no-op on offline or server unavailable
     });
 
     // Update player currency, stats, quests & achievements
